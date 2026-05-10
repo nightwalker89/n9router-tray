@@ -12,6 +12,83 @@ const TOOLS = [
   { id: "copilot",     label: "Copilot" },
 ];
 
+// ── Mode A/B Selector ───────────────────────────────────────────────────────
+
+function ModeSelector({ mode, loading, onChange }) {
+  return (
+    <div style={{
+      display: "flex", borderRadius: 8, overflow: "hidden",
+      border: "1px solid var(--border-light)",
+      opacity: loading ? 0.6 : 1,
+      pointerEvents: loading ? "none" : "auto",
+    }}>
+      <button
+        onClick={() => onChange("A")}
+        style={{
+          flex: 1, padding: "8px 0", fontSize: 10, fontWeight: 600,
+          border: "none", cursor: "pointer",
+          background: mode === "A" ? "rgba(59,130,246,0.15)" : "var(--bg-tertiary)",
+          color: mode === "A" ? "#3B82F6" : "var(--text-tertiary)",
+          borderRight: "1px solid var(--border-light)",
+          transition: "all 0.15s ease",
+        }}
+      >
+        <div style={{ fontSize: 13, marginBottom: 2 }}>🔀</div>
+        <div>Mode A</div>
+        <div style={{ fontSize: 8, fontWeight: 400, marginTop: 1, opacity: 0.7 }}>Model Routing</div>
+      </button>
+      <button
+        onClick={() => onChange("B")}
+        style={{
+          flex: 1, padding: "8px 0", fontSize: 10, fontWeight: 600,
+          border: "none", cursor: "pointer",
+          background: mode === "B" ? "rgba(139,92,246,0.15)" : "var(--bg-tertiary)",
+          color: mode === "B" ? "#8B5CF6" : "var(--text-tertiary)",
+          transition: "all 0.15s ease",
+        }}
+      >
+        <div style={{ fontSize: 13, marginBottom: 2 }}>🔄</div>
+        <div>Mode B</div>
+        <div style={{ fontSize: 8, fontWeight: 400, marginTop: 1, opacity: 0.7 }}>Token Swap</div>
+      </button>
+    </div>
+  );
+}
+
+function ModeDescription({ mode }) {
+  if (mode === "B") {
+    return (
+      <div style={{
+        display: "flex", alignItems: "flex-start", gap: 6,
+        padding: "6px 10px", borderRadius: 6,
+        background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.15)",
+        fontSize: 10, color: "rgba(139,92,246,0.85)", lineHeight: 1.4,
+      }}>
+        <span style={{ flexShrink: 0, marginTop: 1 }}>ℹ️</span>
+        <span>
+          <strong>Token Rotation</strong> — rotates auth tokens across your Antigravity account pool.
+          Model routing (Mode A) is bypassed when active.
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div style={{
+      display: "flex", alignItems: "flex-start", gap: 6,
+      padding: "6px 10px", borderRadius: 6,
+      background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)",
+      fontSize: 10, color: "rgba(59,130,246,0.85)", lineHeight: 1.4,
+    }}>
+      <span style={{ flexShrink: 0, marginTop: 1 }}>ℹ️</span>
+      <span>
+        <strong>Model Routing</strong> — remap model IDs in intercepted Antigravity requests via configured model mappings.
+      </span>
+    </div>
+  );
+}
+
+// ── Main Panel ──────────────────────────────────────────────────────────────
+
 export default function MitmPanel() {
   const { data: status, error, refetch } = usePolling(api.getMitmStatus, 5000);
   const [actionLoading, setActionLoading] = useState(null);
@@ -25,8 +102,27 @@ export default function MitmPanel() {
   const [agLoading, setAgLoading] = useState(null); // "launch"|"quit"|"restart"
   const [agError, setAgError] = useState(null);
 
+  // Mode A/B state
+  const [tokenSwapEnabled, setTokenSwapEnabled] = useState(null); // null = loading
+  const [modeLoading, setModeLoading] = useState(false);
+
   const isRunning = status?.running;
   const hasCachedPassword = status?.hasCachedPassword;
+  const currentMode = tokenSwapEnabled ? "B" : "A";
+
+  // Fetch settings for mode A/B
+  useEffect(() => {
+    let active = true;
+    const fetchSettings = async () => {
+      try {
+        const s = await api.getSettings();
+        if (active) setTokenSwapEnabled(!!s.tokenSwapEnabled);
+      } catch { /* ignore — settings may need auth */ }
+    };
+    fetchSettings();
+    const id = setInterval(fetchSettings, 15000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
 
   // Poll Antigravity app status every 5s via Rust command
   useEffect(() => {
@@ -42,6 +138,23 @@ export default function MitmPanel() {
     const id = setInterval(poll, 5000);
     return () => { active = false; clearInterval(id); };
   }, []);
+
+  // ── Mode switch ─────────────────────────────────────────────────────────
+  const handleModeChange = useCallback(async (mode) => {
+    const newEnabled = mode === "B";
+    if (tokenSwapEnabled === newEnabled) return;
+
+    setModeLoading(true);
+    setTokenSwapEnabled(newEnabled); // optimistic
+    try {
+      await api.updateSettings({ tokenSwapEnabled: newEnabled });
+    } catch (e) {
+      setTokenSwapEnabled(!newEnabled); // rollback
+      setActionError(`Mode switch failed: ${e.message}`);
+    } finally {
+      setModeLoading(false);
+    }
+  }, [tokenSwapEnabled]);
 
   // ── MITM Actions ──────────────────────────────────────────────────────────
   const doAction = useCallback(async (action, pwd) => {
@@ -241,6 +354,30 @@ export default function MitmPanel() {
           </div>
         </div>
       )}
+
+      {/* ── Mode A / B Selector (Antigravity only) ── */}
+      <div className="section">
+        <div className="section-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>Antigravity Mode</span>
+          {tokenSwapEnabled !== null && (
+            <span className={`badge ${currentMode === "B" ? "purple" : "blue"}`} style={{ fontSize: 9 }}>
+              {currentMode === "B" ? "Token Swap" : "Model Routing"}
+            </span>
+          )}
+        </div>
+        <div className="card" style={{ padding: 10 }}>
+          {tokenSwapEnabled === null ? (
+            <div style={{ textAlign: "center", padding: 8 }}><span className="spinner" /></div>
+          ) : (
+            <>
+              <ModeSelector mode={currentMode} loading={modeLoading} onChange={handleModeChange} />
+              <div style={{ marginTop: 8 }}>
+                <ModeDescription mode={currentMode} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* ── DNS Routing ── */}
       <div className="section">

@@ -277,6 +277,16 @@ html, body, #root {
   color: var(--text-secondary);
 }
 
+.badge.purple {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+}
+
+.badge.blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
 .badge .dot {
   width: 6px;
   height: 6px;
