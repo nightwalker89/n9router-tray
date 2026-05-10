@@ -2,27 +2,94 @@ import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { open } from "@tauri-apps/plugin-shell";
 
-const PROVIDER_ICONS = {
-  anthropic: "🟣",
-  openai: "🟢",
-  gemini: "🔵",
-  google: "🔵",
-  cursor: "📝",
-  codex: "⚡",
-  kiro: "🪁",
-  copilot: "🤖",
-  openrouter: "🌐",
-  deepseek: "🐋",
-  together: "🤝",
-  groq: "⚡",
-  mistral: "🔶",
-  xai: "✖️",
-  default: "🔸",
+// Serve provider icons directly from n9router's public/providers/ folder
+const N9_BASE = "http://localhost:20128";
+
+// Map provider IDs/names to their icon filename in n9router/public/providers/
+const PROVIDER_ICON_FILE = {
+  anthropic:        "anthropic.png",
+  openai:           "openai.png",
+  gemini:           "gemini.png",
+  "gemini-cli":     "gemini-cli.png",
+  google:           "gemini.png",
+  cursor:           "cursor.png",
+  codex:            "codex.png",
+  kiro:             "kiro.png",
+  copilot:          "copilot.png",
+  "github-copilot": "copilot.png",
+  openrouter:       "openrouter.png",
+  deepseek:         "deepseek.png",
+  together:         "together.png",
+  groq:             "groq.png",
+  mistral:          "mistral.png",
+  xai:              "xai.png",
+  grok:             "xai.png",
+  ollama:           "ollama.png",
+  azure:            "azure.png",
+  vertex:           "vertex.png",
+  claude:           "claude.png",
+  antigravity:      "antigravity.png",
+  iflow:            "iflow.png",
+  deepgram:         "deepgram.png",
+  groqcloud:        "groq.png",
+  fireworks:        "fireworks.png",
+  perplexity:       "perplexity.png",
+  cohere:           "cohere.png",
+  huggingface:      "huggingface.png",
+  cerebras:         "cerebras.png",
+  hyperbolic:       "hyperbolic.png",
+  nvidia:           "nvidia.png",
+  qwen:             "qwen.png",
+  minimax:          "minimax.png",
+  kimi:             "kimi.png",
+  glm:              "glm.png",
+  blackbox:         "blackbox.png",
+  roo:              "roo.png",
+  cline:            "cline.png",
+  continue:         "continue.png",
+  droid:            "droid.png",
+  openclaw:         "openclaw.png",
+  hermes:           "hermes.png",
 };
 
-function getProviderIcon(provider) {
-  const key = (provider || "").toLowerCase();
-  return PROVIDER_ICONS[key] || PROVIDER_ICONS.default;
+function getIconUrl(provider) {
+  const key = (provider || "").toLowerCase().replace(/[_\s]/g, "-");
+  const file = PROVIDER_ICON_FILE[key];
+  if (file) return `${N9_BASE}/providers/${file}`;
+  return null;
+}
+
+function ProviderIcon({ provider, name, size = 28 }) {
+  const src = getIconUrl(provider);
+  if (!src) {
+    // Fallback: first letter avatar
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: Math.round(size * 0.22),
+        background: "var(--bg-tertiary)", display: "flex", alignItems: "center",
+        justifyContent: "center", fontSize: size * 0.45, fontWeight: 700,
+        color: "var(--text-secondary)", flexShrink: 0,
+      }}>
+        {(name || provider || "?")[0].toUpperCase()}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      width={size}
+      height={size}
+      alt={provider}
+      onError={(e) => { e.target.style.display = "none"; }}
+      style={{
+        borderRadius: Math.round(size * 0.22),
+        objectFit: "contain",
+        flexShrink: 0,
+        display: "block",
+        background: "var(--bg-secondary)",
+      }}
+    />
+  );
 }
 
 export default function ProvidersPanel() {
@@ -110,7 +177,7 @@ export default function ProvidersPanel() {
               const allValid = validCount === totalCount;
               return (
                 <div className="list-item" key={node.id}>
-                  <div className="item-icon">{getProviderIcon(node.provider)}</div>
+                  <ProviderIcon provider={node.provider} name={node.name} size={28} />
                   <div className="item-content">
                     <div className="item-title">{node.name}</div>
                     <div className="item-subtitle">

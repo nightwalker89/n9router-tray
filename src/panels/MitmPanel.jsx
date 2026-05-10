@@ -1,26 +1,49 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
+import { ToolIcon, AntigravityIcon } from "../components/BrandIcons";
 
 const TOOLS = [
-  { id: "antigravity", label: "Antigravity", icon: "🔮" },
-  { id: "cursor", label: "Cursor", icon: "📝" },
-  { id: "codex", label: "Codex", icon: "⚡" },
-  { id: "kiro", label: "Kiro", icon: "🪁" },
-  { id: "copilot", label: "Copilot", icon: "🤖" },
+  { id: "antigravity", label: "Antigravity" },
+  { id: "cursor",      label: "Cursor" },
+  { id: "codex",       label: "Codex" },
+  { id: "kiro",        label: "Kiro" },
+  { id: "copilot",     label: "Copilot" },
 ];
 
 export default function MitmPanel() {
   const { data: status, error, refetch } = usePolling(api.getMitmStatus, 5000);
-  const [actionLoading, setActionLoading] = useState(null); // "start" | "stop" | tool id
+  const [actionLoading, setActionLoading] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState("");
   const [pendingAction, setPendingAction] = useState(null);
 
+  // Antigravity app state (polled via Rust)
+  const [agStatus, setAgStatus] = useState(null); // { running, pid, installed }
+  const [agLoading, setAgLoading] = useState(null); // "launch"|"quit"|"restart"
+  const [agError, setAgError] = useState(null);
+
   const isRunning = status?.running;
   const hasCachedPassword = status?.hasCachedPassword;
 
+  // Poll Antigravity app status every 5s via Rust command
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      if (!active) return;
+      try {
+        const s = await invoke("antigravity_status");
+        if (active) setAgStatus(s);
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+
+  // ── MITM Actions ──────────────────────────────────────────────────────────
   const doAction = useCallback(async (action, pwd) => {
     setActionError(null);
     setActionLoading(action);
@@ -30,7 +53,6 @@ export default function MitmPanel() {
       } else if (action === "stop") {
         await api.stopMitm(pwd || "");
       } else {
-        // DNS toggle — action is like "enable:cursor"
         const [dnsAction, tool] = action.split(":");
         await api.toggleDNS(tool, dnsAction, pwd || "");
       }
@@ -59,14 +81,34 @@ export default function MitmPanel() {
     doAction(pendingAction, password);
   }, [password, pendingAction, doAction]);
 
-  const handleToggleServer = useCallback(() => {
-    handleAction(isRunning ? "stop" : "start");
-  }, [isRunning, handleAction]);
-
   const handleToggleDNS = useCallback((tool) => {
     const currentlyActive = status?.dnsStatus?.[tool];
     handleAction(`${currentlyActive ? "disable" : "enable"}:${tool}`);
   }, [status, handleAction]);
+
+  // ── Antigravity App Actions (via Rust) ────────────────────────────────────
+  const handleAgAction = useCallback(async (action) => {
+    setAgError(null);
+    setAgLoading(action);
+    try {
+      if (action === "launch") {
+        await invoke("antigravity_launch");
+      } else if (action === "quit") {
+        await invoke("antigravity_quit");
+      } else if (action === "restart") {
+        await invoke("antigravity_restart");
+      }
+      // Refresh status after brief delay
+      setTimeout(async () => {
+        const s = await invoke("antigravity_status");
+        setAgStatus(s);
+        setAgLoading(null);
+      }, 1200);
+    } catch (e) {
+      setAgError(typeof e === "string" ? e : (e?.message || "Action failed"));
+      setAgLoading(null);
+    }
+  }, []);
 
   if (error && !status) {
     return (
@@ -79,6 +121,9 @@ export default function MitmPanel() {
     );
   }
 
+  const agRunning = agStatus?.running;
+  const agInstalled = agStatus?.installed !== false;
+
   return (
     <div>
       {/* Action Error */}
@@ -89,12 +134,14 @@ export default function MitmPanel() {
         </div>
       )}
 
-      {/* Server Toggle */}
+      {/* ── MITM Server Card ── */}
       <div className="section">
         <div className="card">
           <div className="toggle-row">
             <div className="toggle-label">
-              <span className="icon">🛡️</span>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(255,69,58,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
+                🛡️
+              </div>
               <div>
                 <div style={{ fontWeight: 600 }}>MITM Proxy</div>
                 <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 1 }}>
@@ -111,15 +158,15 @@ export default function MitmPanel() {
               )}
               <button
                 className={`toggle-switch ${isRunning ? "on" : ""} ${actionLoading === "start" || actionLoading === "stop" ? "loading" : ""}`}
-                onClick={handleToggleServer}
+                onClick={() => handleAction(isRunning ? "stop" : "start")}
                 disabled={!!actionLoading}
               />
             </div>
           </div>
 
-          {/* Cert indicators */}
+          {/* Cert status row */}
           {status && (
-            <div style={{ display: "flex", gap: 12, padding: "6px 12px 0", fontSize: 11 }}>
+            <div style={{ display: "flex", gap: 12, padding: "6px 12px 2px", fontSize: 11 }}>
               <span style={{ color: status.certExists ? "var(--green)" : "var(--text-tertiary)" }}>
                 {status.certExists ? "✓" : "✗"} Cert
               </span>
@@ -134,17 +181,80 @@ export default function MitmPanel() {
         </div>
       </div>
 
-      {/* DNS Routing */}
+      {/* ── Antigravity App Controls ── */}
+      {agInstalled && (
+        <div className="section">
+          <div className="section-header">Antigravity App</div>
+          <div className="card">
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <AntigravityIcon size={28} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Antigravity</div>
+                <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
+                  {agStatus === null ? "Checking..." : agRunning ? `Running · PID ${agStatus?.pid || "—"}` : "Not running"}
+                </div>
+              </div>
+              {agStatus !== null && (
+                agRunning ? (
+                  <span className="badge green"><span className="dot pulse" /> On</span>
+                ) : (
+                  <span className="badge gray">Off</span>
+                )
+              )}
+            </div>
+
+            {agError && (
+              <div className="error-banner" style={{ marginBottom: 8 }}>
+                <span>⚠️</span><span>{agError}</span>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 6 }}>
+              {!agRunning ? (
+                <button
+                  className="ag-btn ag-btn-green"
+                  onClick={() => handleAgAction("launch")}
+                  disabled={!!agLoading}
+                >
+                  {agLoading === "launch" ? <span className="spinner" /> : "▶ Launch"}
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="ag-btn ag-btn-yellow"
+                    onClick={() => handleAgAction("restart")}
+                    disabled={!!agLoading}
+                  >
+                    {agLoading === "restart" ? <span className="spinner" /> : "↺ Restart"}
+                  </button>
+                  <button
+                    className="ag-btn ag-btn-red"
+                    onClick={() => handleAgAction("quit")}
+                    disabled={!!agLoading}
+                  >
+                    {agLoading === "quit" ? <span className="spinner" /> : "■ Quit"}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DNS Routing ── */}
       <div className="section">
         <div className="section-header">DNS Routing</div>
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           {TOOLS.map((tool) => {
             const active = status?.dnsStatus?.[tool.id] || false;
-            const isToolLoading = actionLoading === `enable:${tool.id}` || actionLoading === `disable:${tool.id}`;
+            const isToolLoading =
+              actionLoading === `enable:${tool.id}` ||
+              actionLoading === `disable:${tool.id}`;
             return (
               <div className="toggle-row" key={tool.id}>
                 <div className="toggle-label">
-                  <span className="icon">{tool.icon}</span>
+                  <ToolIcon tool={tool.id} size={22} />
                   <span>{tool.label}</span>
                 </div>
                 <button
@@ -158,7 +268,7 @@ export default function MitmPanel() {
         </div>
       </div>
 
-      {/* Password Prompt */}
+      {/* ── Sudo Password Prompt ── */}
       {showPassword && (
         <div className="password-prompt">
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>

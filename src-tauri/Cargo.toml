@@ -24,6 +24,7 @@ tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell = "2"
 tauri-plugin-http = { version = "2", features = ["default"] }
 open = "5"
+libc = "0.2"
 
 [profile.release]
 strip = true

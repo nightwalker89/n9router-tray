@@ -608,6 +608,49 @@ html, body, #root {
   color: var(--text-primary);
 }
 
+/* ─── Antigravity Action Buttons ─── */
+.ag-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ag-btn-green {
+  background: var(--green-dim);
+  border-color: rgba(48, 209, 88, 0.3);
+  color: var(--green);
+}
+.ag-btn-green:hover { background: rgba(48, 209, 88, 0.25); }
+
+.ag-btn-yellow {
+  background: var(--yellow-dim);
+  border-color: rgba(255, 214, 10, 0.3);
+  color: var(--yellow);
+}
+.ag-btn-yellow:hover { background: rgba(255, 214, 10, 0.25); }
+
+.ag-btn-red {
+  background: var(--red-dim);
+  border-color: rgba(255, 69, 58, 0.3);
+  color: var(--red);
+}
+.ag-btn-red:hover { background: rgba(255, 69, 58, 0.25); }
+
+.ag-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ─── Animations ─── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }

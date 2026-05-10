@@ -2074,6 +2074,7 @@ dependencies = [
 name = "n9-control"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "log",
  "open",
  "serde",
