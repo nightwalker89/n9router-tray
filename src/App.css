@@ -608,6 +608,28 @@ html, body, #root {
   color: var(--text-primary);
 }
 
+/* ─── Provider Account Rows ─── */
+.provider-account-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.provider-account-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Smooth expand for account lists */
+.provider-accounts {
+  animation: slideDown 0.15s ease;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ─── Antigravity Action Buttons ─── */
 .ag-btn {
   flex: 1;

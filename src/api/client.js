@@ -37,7 +37,9 @@ export const api = {
   getUsageStats: (period = "24h") => request("GET", `/api/usage/stats?period=${period}`),
 
   // Providers & Combos
-  getProviders: () => request("GET", "/api/providers"),
-  getProviderNodes: () => request("GET", "/api/provider-nodes"),
-  getCombos: () => request("GET", "/api/combos"),
+  getProviders: () => request("GET", "/api/providers").then(d => d.connections ?? d),
+  getProviderNodes: () => request("GET", "/api/provider-nodes").then(d => d.nodes ?? d),
+  getCombos: () => request("GET", "/api/combos").then(d => d.combos ?? d),
+  toggleConnection: (id, isActive) => request("PUT", `/api/providers/${id}`, { isActive }),
+  testConnection: (id) => request("POST", `/api/providers/${id}/test`),
 };
