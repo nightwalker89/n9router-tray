@@ -63,7 +63,7 @@ export default function CodexConnection({ conn, quota, onToggle, toggling }) {
             <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {conn.name || conn.email || conn.id.slice(0, 8)}
             </span>
-            <AccountTypeBadge type={quota?.plan || conn.accountType} />
+            <AccountTypeBadge type={conn.accountType || quota?.plan} />
             {quota?.raw?.limitReached && (
               <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 3, background: "rgba(255,69,58,0.15)", color: "var(--red)", border: "1px solid rgba(255,69,58,0.3)" }}>LIMIT</span>
             )}

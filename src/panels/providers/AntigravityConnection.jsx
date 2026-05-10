@@ -103,7 +103,7 @@ export default function AntigravityConnection({ conn, quota, healthEvents, onTog
             <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {conn.name || conn.email || conn.id.slice(0, 8)}
             </span>
-            <AccountTypeBadge type={quota?.plan || conn.accountType} />
+            <AccountTypeBadge type={conn.accountType || quota?.plan} />
           </div>
           <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1 }}>
             {conn.email || conn.authType}
