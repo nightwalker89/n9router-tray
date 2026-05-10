@@ -42,4 +42,6 @@ export const api = {
   getCombos: () => request("GET", "/api/combos").then(d => d.combos ?? d),
   toggleConnection: (id, isActive) => request("PUT", `/api/providers/${id}`, { isActive }),
   testConnection: (id) => request("POST", `/api/providers/${id}/test`),
+  getAccountQuota: (id) => request("GET", `/api/usage/${id}`),
+  getAccountHealth: () => request("GET", "/api/internal/account-health").then(d => d.accounts ?? {}),
 };
