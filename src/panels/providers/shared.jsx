@@ -4,6 +4,25 @@
 
 const N9_BASE = "http://localhost:20128";
 
+// ── Email masking (mirrors TokenSwapPoolCard.maskEmail) ─────────────────────
+
+export function maskEmail(email) {
+  if (!email || typeof email !== "string") return email;
+  const atIndex = email.indexOf("@");
+  if (atIndex <= 0 || atIndex === email.length - 1) return email;
+
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+
+  if (local.length === 1) return `${local[0]}**@${domain}`;
+  if (local.length === 2) return `${local[0]}**${local[1]}@${domain}`;
+
+  return `${local[0]}**${local[local.length - 1]}@${domain}`;
+}
+
+export function displayEmail(email, shouldMask) {
+  return shouldMask ? maskEmail(email) : email;
+}
 // ── Icon helpers ────────────────────────────────────────────────────────────
 
 const PROVIDER_ICON_FILE = {

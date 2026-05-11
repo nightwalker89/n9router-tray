@@ -7,7 +7,7 @@
 import { useState } from "react";
 import {
   StatusDot, ActiveToggle, Chevron, AccountTypeBadge,
-  QuotaBar, formatResetTime, getBarColor,
+  QuotaBar, formatResetTime, getBarColor, displayEmail,
 } from "./shared";
 
 function getQuotaByKey(quotas, key) {
@@ -41,7 +41,7 @@ function CodexInlineSummary({ session, weekly }) {
   );
 }
 
-export default function CodexConnection({ conn, quota, onToggle, toggling }) {
+export default function CodexConnection({ conn, quota, onToggle, toggling, maskEmails }) {
   const [expanded, setExpanded] = useState(false);
   const allQuotas = quota?.quotas || [];
   const session = getQuotaByKey(allQuotas, "session");
@@ -61,7 +61,7 @@ export default function CodexConnection({ conn, quota, onToggle, toggling }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {conn.name || conn.email || conn.id.slice(0, 8)}
+              {conn.name || displayEmail(conn.email, maskEmails) || conn.id.slice(0, 8)}
             </span>
             <AccountTypeBadge type={conn.accountType || quota?.plan} />
             {quota?.raw?.limitReached && (
@@ -69,7 +69,7 @@ export default function CodexConnection({ conn, quota, onToggle, toggling }) {
             )}
           </div>
           <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1 }}>
-            {conn.email || conn.authType}
+            {displayEmail(conn.email, maskEmails) || conn.authType}
           </div>
           {/* Inline: both bars when collapsed */}
           {!expanded && <CodexInlineSummary session={session} weekly={weekly} />}

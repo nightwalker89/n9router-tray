@@ -10,6 +10,7 @@ import { useState } from "react";
 import {
   StatusDot, ActiveToggle, Chevron, AccountTypeBadge,
   QuotaBar, QuotaSummaryInline, formatResetTime, getBarColor,
+  displayEmail,
 } from "./shared";
 
 const HIGHLIGHT_KEY = "claude-sonnet-4-6";
@@ -82,7 +83,7 @@ function HealthDotStrip({ events, compact = false }) {
   );
 }
 
-export default function AntigravityConnection({ conn, quota, healthEvents, onToggle, toggling }) {
+export default function AntigravityConnection({ conn, quota, healthEvents, onToggle, toggling, maskEmails }) {
   const [expanded, setExpanded] = useState(false);
   const allQuotas = quota?.quotas || [];
   const highlight = getHighlightQuota(allQuotas);
@@ -101,12 +102,12 @@ export default function AntigravityConnection({ conn, quota, healthEvents, onTog
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {conn.name || conn.email || conn.id.slice(0, 8)}
+              {conn.name || displayEmail(conn.email, maskEmails) || conn.id.slice(0, 8)}
             </span>
             <AccountTypeBadge type={conn.accountType || quota?.plan} />
           </div>
           <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1 }}>
-            {conn.email || conn.authType}
+            {displayEmail(conn.email, maskEmails) || conn.authType}
           </div>
           {/* Inline Sonnet 4.6 quota bar when collapsed */}
           {!expanded && highlight && <QuotaSummaryInline q={highlight} />}

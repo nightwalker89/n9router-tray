@@ -16,7 +16,7 @@ function getConnectionComponent(provider) {
   }
 }
 
-export default function ProviderGroup({ node, quotas, healthData, onToggle, togglingId }) {
+export default function ProviderGroup({ node, quotas, healthData, onToggle, togglingId, maskEmails }) {
   const [expanded, setExpanded] = useState(false);
   const activeCount = node.connections.filter(c => c.testStatus === "active").length;
   const total = node.connections.length;
@@ -54,6 +54,7 @@ export default function ProviderGroup({ node, quotas, healthData, onToggle, togg
                 healthEvents={healthEvents}
                 onToggle={onToggle}
                 toggling={togglingId === conn.id}
+                maskEmails={maskEmails}
               />
             );
           })}

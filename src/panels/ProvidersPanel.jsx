@@ -16,7 +16,21 @@ export default function ProvidersPanel() {
   const [localOverrides, setLocalOverrides] = useState({});
   const [quotas, setQuotas] = useState({});
   const [healthData, setHealthData] = useState({});
+  const [maskEmails, setMaskEmails] = useState(false);
   const quotaFetched = useRef(new Set());
+
+  // Fetch mask-emails setting
+  useEffect(() => {
+    let active = true;
+    const fetchMask = () => {
+      api.getSettings()
+        .then(s => { if (active) setMaskEmails(!!s.tokenSwapMaskEmails); })
+        .catch(() => {});
+    };
+    fetchMask();
+    const id = setInterval(fetchMask, 30000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
 
   // Poll account health (for antigravity health dots)
   useEffect(() => {
@@ -144,6 +158,7 @@ export default function ProvidersPanel() {
                 healthData={healthData}
                 onToggle={handleToggle}
                 togglingId={togglingId}
+                maskEmails={maskEmails}
               />
             ))
           )}
