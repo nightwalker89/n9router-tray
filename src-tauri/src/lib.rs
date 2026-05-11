@@ -228,6 +228,100 @@ fn antigravity_restart() -> Result<serde_json::Value, String> {
     antigravity_launch()
 }
 
+// ── n9router Process Management ─────────────────────────────────────────────
+
+/// The n9router CLI binary name (installed via `npm i -g n9router`)
+const N9ROUTER_BIN: &str = "n9router";
+/// Fallback: the default port n9router runs on
+const N9ROUTER_PORT: u16 = 20128;
+
+/// Find n9router server PID by searching for node processes listening on port 20128
+fn find_n9router_pid() -> Option<u32> {
+    // Method 1: Use lsof to find the process on port 20128
+    let output = Command::new("lsof")
+        .args(["-ti", &format!(":{}", N9ROUTER_PORT)])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // lsof returns one PID per line — take the first
+        if let Some(pid) = stdout.trim().split('\n').next() {
+            if let Ok(p) = pid.trim().parse::<u32>() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+/// Check if the `n9router` CLI is installed
+fn is_n9router_installed() -> bool {
+    Command::new("which")
+        .arg(N9ROUTER_BIN)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+fn n9router_status() -> serde_json::Value {
+    let pid = find_n9router_pid();
+    let installed = is_n9router_installed();
+    serde_json::json!({
+        "running": pid.is_some(),
+        "pid": pid,
+        "installed": installed,
+    })
+}
+
+#[tauri::command]
+fn n9router_start() -> Result<serde_json::Value, String> {
+    use std::os::unix::process::CommandExt;
+
+    if find_n9router_pid().is_some() {
+        return Ok(serde_json::json!({ "ok": true, "method": "already_running" }));
+    }
+
+    if !is_n9router_installed() {
+        return Err("n9router CLI not found. Install with: npm i -g n9router".into());
+    }
+
+    let mut cmd = Command::new(N9ROUTER_BIN);
+    // Detach: create new session so n9router outlives the tray process
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::setsid();
+            Ok(())
+        });
+    }
+
+    let child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to start n9router: {e}"))?;
+
+    let pid = child.id();
+    drop(child);
+
+    Ok(serde_json::json!({ "ok": true, "pid": pid }))
+}
+
+#[tauri::command]
+fn n9router_stop() -> Result<serde_json::Value, String> {
+    let pid = find_n9router_pid();
+    match pid {
+        None => Ok(serde_json::json!({ "ok": true, "method": "not_running" })),
+        Some(p) => {
+            // Send SIGTERM for graceful shutdown
+            kill_pid(p);
+            Ok(serde_json::json!({ "ok": true, "method": "sigterm", "pid": p }))
+        }
+    }
+}
+
 // ── App Entry ────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -241,6 +335,9 @@ pub fn run() {
             antigravity_launch,
             antigravity_quit,
             antigravity_restart,
+            n9router_status,
+            n9router_start,
+            n9router_stop,
         ])
         .setup(|app| {
             // ── macOS: hide from Dock ──

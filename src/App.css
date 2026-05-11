@@ -707,3 +707,122 @@ html, body, #root {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ─── Bottom Status Bar ─── */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: rgba(20, 20, 22, 0.95);
+  min-height: 32px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.status-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.status-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.status-bar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.status-bar-dot.online {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(48, 209, 88, 0.5);
+}
+
+.status-bar-dot.offline {
+  background: var(--red);
+  box-shadow: 0 0 4px rgba(255, 69, 58, 0.3);
+}
+
+.status-bar-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-bar-btn {
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+
+.status-bar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.status-bar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.status-bar-btn-start {
+  background: rgba(48, 209, 88, 0.1);
+  border-color: rgba(48, 209, 88, 0.25);
+  color: var(--green);
+}
+
+.status-bar-btn-start:hover {
+  background: rgba(48, 209, 88, 0.2);
+}
+
+.status-bar-btn-danger {
+  background: rgba(255, 69, 58, 0.1);
+  border-color: rgba(255, 69, 58, 0.25);
+  color: var(--red);
+}
+
+.status-bar-btn-danger:hover {
+  background: rgba(255, 69, 58, 0.2);
+}
+
+/* Confirm overlay inside status bar */
+.status-bar-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  animation: fadeIn 0.1s ease;
+}
+
+/* Error overlay inside status bar */
+.status-bar-error {
+  font-size: 10px;
+  color: var(--red);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
