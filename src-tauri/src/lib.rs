@@ -1,4 +1,8 @@
+use std::collections::VecDeque;
+use std::io::{BufRead, BufReader};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
+use once_cell::sync::Lazy;
 use tauri::{
     image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
@@ -11,13 +15,30 @@ use tauri_plugin_positioner::{Position, WindowExt};
 
 const ANTIGRAVITY_APP_PATH: &str = "/Applications/Antigravity.app";
 const ANTIGRAVITY_MACOS_BIN: &str = "/Applications/Antigravity.app/Contents/MacOS/Antigravity";
-
-/// pgrep search term: matches processes whose path contains this string
 const ANTIGRAVITY_BUNDLE_TERM: &str = "Antigravity.app/Contents/MacOS";
+const N9ROUTER_BIN: &str = "n9router";
+const N9ROUTER_PORT: u16 = 20128;
+const LOG_RING_CAPACITY: usize = 2000;
 
-// ── Process Detection (mirrors ide-launcher.ts logic) ───────────────────────
+/// Known terminal apps (the comm basename we look for in the ppid chain)
+const KNOWN_TERMINALS: &[&str] = &[
+    "Terminal", "iTerm2", "iTerm", "kitty", "Alacritty", "WezTerm",
+    "Warp", "Tabby", "Hyper", "wezterm-gui",
+];
 
-/// Parse pgrep output into a Vec of PIDs
+// ── Managed process state ────────────────────────────────────────────────────
+
+struct ManagedProcess {
+    pid: u32,
+    lines: Arc<Mutex<VecDeque<String>>>,
+}
+
+/// Global managed n9router process state
+static N9_MANAGED: Lazy<Mutex<Option<ManagedProcess>>> =
+    Lazy::new(|| Mutex::new(None));
+
+// ── Process Detection ────────────────────────────────────────────────────────
+
 fn parse_pids(output: &str) -> Vec<u32> {
     output
         .trim()
@@ -27,9 +48,6 @@ fn parse_pids(output: &str) -> Vec<u32> {
         .collect()
 }
 
-/// Check if a process line is the main Electron process, not a helper.
-/// Mirrors _isMainProcess: ppid == 1, path contains /Contents/MacOS/,
-/// does NOT contain "Helper" or "chrome_crashpad_handler".
 fn is_main_process(ppid: u32, comm: &str) -> bool {
     ppid == 1
         && comm.contains("/Contents/MacOS/")
@@ -37,7 +55,6 @@ fn is_main_process(ppid: u32, comm: &str) -> bool {
         && !comm.contains("chrome_crashpad_handler")
 }
 
-/// Find all PIDs running Antigravity via `pgrep -f`
 fn find_all_pids() -> Vec<u32> {
     let output = match Command::new("pgrep")
         .args(["-f", ANTIGRAVITY_BUNDLE_TERM])
@@ -46,79 +63,51 @@ fn find_all_pids() -> Vec<u32> {
         Ok(o) => o,
         Err(_) => return vec![],
     };
-
     if !output.status.success() {
         return vec![];
     }
     parse_pids(&String::from_utf8_lossy(&output.stdout))
 }
 
-/// Find the main Electron process PID from a list of candidate PIDs.
-/// Uses `ps -o pid=,ppid=,comm=` — mirrors _findMainProcessPid().
 fn find_main_pid(pids: &[u32]) -> Option<u32> {
     if pids.is_empty() {
         return None;
     }
-
     let pid_args: Vec<String> = pids.iter().map(|p| p.to_string()).collect();
     let ps_arg = pid_args.join(",");
-
     let output = Command::new("ps")
         .args(["-o", "pid=,ppid=,comm=", "-p", &ps_arg])
         .output()
         .ok()?;
-
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut parent_pids: Vec<u32> = vec![];
-
     for line in stdout.trim().split('\n') {
         let parts: Vec<&str> = line.trim().splitn(3, char::is_whitespace).collect();
-        if parts.len() < 3 {
-            continue;
-        }
+        if parts.len() < 3 { continue; }
         let pid: u32 = parts[0].trim().parse().unwrap_or(0);
         let ppid: u32 = parts[1].trim().parse().unwrap_or(0);
         let comm = parts[2].trim();
-
-        if is_main_process(ppid, comm) {
-            return Some(pid);
-        }
-        // Collect parent PIDs that aren't in our list — for fallback scan
-        if ppid != 1 && !pids.contains(&ppid) {
-            parent_pids.push(ppid);
-        }
+        if is_main_process(ppid, comm) { return Some(pid); }
+        if ppid != 1 && !pids.contains(&ppid) { parent_pids.push(ppid); }
     }
-
-    // Fallback: main process might not appear in pgrep results (macOS args truncation)
-    if parent_pids.is_empty() {
-        return None;
-    }
-
+    if parent_pids.is_empty() { return None; }
     let parent_arg: Vec<String> = parent_pids.iter().map(|p| p.to_string()).collect();
     let parent_ps = Command::new("ps")
         .args(["-o", "pid=,ppid=,comm=", "-p", &parent_arg.join(",")])
         .output()
         .ok()?;
-
     let parent_stdout = String::from_utf8_lossy(&parent_ps.stdout);
     for line in parent_stdout.trim().split('\n') {
         let parts: Vec<&str> = line.trim().splitn(3, char::is_whitespace).collect();
-        if parts.len() < 3 {
-            continue;
-        }
+        if parts.len() < 3 { continue; }
         let pid: u32 = parts[0].trim().parse().unwrap_or(0);
         let ppid: u32 = parts[1].trim().parse().unwrap_or(0);
         let comm = parts[2].trim();
-
-        if is_main_process(ppid, comm) {
-            return Some(pid);
-        }
+        if is_main_process(ppid, comm) { return Some(pid); }
     }
-
     None
 }
 
-/// Kill a single PID with SIGTERM (graceful), returns true if sent
 fn kill_pid(pid: u32) -> bool {
     Command::new("kill")
         .arg(pid.to_string())
@@ -127,135 +116,39 @@ fn kill_pid(pid: u32) -> bool {
         .unwrap_or(false)
 }
 
-// ── Tauri Commands ───────────────────────────────────────────────────────────
+// ── n9router helpers ─────────────────────────────────────────────────────────
 
-/// Status: check if Antigravity.app is installed and/or running
-#[tauri::command]
-fn antigravity_status() -> serde_json::Value {
-    let all_pids = find_all_pids();
-    let running = !all_pids.is_empty();
-
-    // Find the main process for the PID display
-    let main_pid: Option<u32> = if running {
-        find_main_pid(&all_pids).or_else(|| all_pids.first().copied())
-    } else {
-        None
-    };
-
-    let installed = std::path::Path::new(ANTIGRAVITY_APP_PATH).exists();
-
-    serde_json::json!({
-        "running": running,
-        "pid": main_pid,
-        "all_pids": all_pids,
-        "installed": installed,
-    })
-}
-
-/// Launch Antigravity.app: spawn detached, unref — mirrors _spawnProcess()
-#[tauri::command]
-fn antigravity_launch() -> Result<serde_json::Value, String> {
-    use std::os::unix::process::CommandExt;
-
-    let mut cmd = Command::new(ANTIGRAVITY_MACOS_BIN);
-    // Detach: create new session so child outlives the tray process
-    // Mirrors Node's { detached: true, stdio: 'ignore' } + child.unref()
-    unsafe {
-        cmd.pre_exec(|| {
-            libc::setsid();
-            Ok(())
-        });
-    }
-
-    let child = cmd
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Failed to launch Antigravity: {e}"))?;
-
-    // Drop handle → equivalent to child.unref() in Node
-    let pid = child.id();
-    drop(child);
-
-    Ok(serde_json::json!({ "ok": true, "pid": pid }))
-}
-
-/// Quit Antigravity: kill only the main process — children auto-terminate.
-/// Mirrors killProcesses() in ide-launcher.ts.
-#[tauri::command]
-fn antigravity_quit() -> Result<serde_json::Value, String> {
-    let all_pids = find_all_pids();
-    if all_pids.is_empty() {
-        return Ok(serde_json::json!({ "ok": true, "method": "not_running" }));
-    }
-
-    // Prefer to kill only the main process (mirrors _findMainProcessPid logic)
-    let killed_pid = if let Some(main_pid) = find_main_pid(&all_pids) {
-        log::info!("[n9-control] Killing main Antigravity process PID {main_pid}");
-        kill_pid(main_pid);
-        main_pid
-    } else {
-        // Fallback: kill all found pids
-        log::warn!("[n9-control] Could not find main process, killing all {} PIDs", all_pids.len());
-        for pid in &all_pids {
-            kill_pid(*pid);
-        }
-        *all_pids.first().unwrap()
-    };
-
-    Ok(serde_json::json!({ "ok": true, "method": "kill_main", "pid": killed_pid }))
-}
-
-/// Restart: kill main process, wait for children to die, then relaunch
-#[tauri::command]
-fn antigravity_restart() -> Result<serde_json::Value, String> {
-    // First quit
-    let all_pids = find_all_pids();
-    if !all_pids.is_empty() {
-        if let Some(main_pid) = find_main_pid(&all_pids) {
-            kill_pid(main_pid);
-        } else {
-            for pid in &all_pids {
-                kill_pid(*pid);
-            }
-        }
-        // Wait for clean shutdown (mirrors the 2000ms wait in killProcesses)
-        std::thread::sleep(std::time::Duration::from_millis(2000));
-    }
-
-    // Relaunch
-    antigravity_launch()
-}
-
-// ── n9router Process Management ─────────────────────────────────────────────
-
-/// The n9router CLI binary name (installed via `npm i -g n9router`)
-const N9ROUTER_BIN: &str = "n9router";
-/// Fallback: the default port n9router runs on
-const N9ROUTER_PORT: u16 = 20128;
-
-/// Find n9router server PID by searching for node processes listening on port 20128
-fn find_n9router_pid() -> Option<u32> {
-    // Method 1: Use lsof to find the process on port 20128
-    let output = Command::new("lsof")
+/// Return ALL PIDs listening on n9router port, preferring ones with a terminal ancestor.
+/// Multiple PIDs can appear when e.g. Chrome and a terminal both hold a process on the port.
+fn find_n9router_pids() -> Vec<u32> {
+    let output = match Command::new("lsof")
         .args(["-ti", &format!(":{}", N9ROUTER_PORT)])
         .output()
-        .ok()?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        // lsof returns one PID per line — take the first
-        if let Some(pid) = stdout.trim().split('\n').next() {
-            if let Ok(p) = pid.trim().parse::<u32>() {
-                return Some(p);
-            }
-        }
-    }
-    None
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return vec![],
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .split('\n')
+        .filter_map(|s| s.trim().parse::<u32>().ok())
+        .collect()
 }
 
-/// Check if the `n9router` CLI is installed
+/// Return a single PID for status/stop: prefer the terminal-started one.
+fn find_n9router_pid() -> Option<u32> {
+    let pids = find_n9router_pids();
+    if pids.is_empty() { return None; }
+    // Prefer a pid that has a terminal ancestor
+    for &p in &pids {
+        if find_terminal_ancestor(p).is_some() {
+            return Some(p);
+        }
+    }
+    // Fall back to first
+    pids.into_iter().next()
+}
+
 fn is_n9router_installed() -> bool {
     Command::new("which")
         .arg(N9ROUTER_BIN)
@@ -264,14 +157,142 @@ fn is_n9router_installed() -> bool {
         .unwrap_or(false)
 }
 
+/// Tail the last `count` lines from ~/.n9router/log.txt
+fn tail_log_file(count: usize) -> Vec<String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let path = format!("{}/.n9router/log.txt", home);
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return vec![format!("[n9router] Log file not found: {}", path)],
+    };
+    let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+    lines.into_iter().rev().take(count).rev().collect()
+}
+
+/// Walk ppid chain from `pid`, return the first terminal app name found.
+/// Uses separate `ps -o ppid=` and `ps -o command=` calls to get the FULL
+/// (non-truncated) command path — macOS `comm=` truncates at 16 chars.
+fn find_terminal_ancestor(start_pid: u32) -> Option<String> {
+    let mut pid = start_pid;
+    for _ in 0..12 {
+        // Step 1: get parent PID
+        let ppid_out = Command::new("ps")
+            .args(["-o", "ppid=", "-p", &pid.to_string()])
+            .output()
+            .ok()?;
+        let ppid_str = String::from_utf8_lossy(&ppid_out.stdout);
+        let ppid: u32 = ppid_str.trim().parse().unwrap_or(0);
+
+        // Step 2: get full command line of current pid (not truncated)
+        let cmd_out = Command::new("ps")
+            .args(["-o", "command=", "-p", &pid.to_string()])
+            .output()
+            .ok()?;
+        let cmd = String::from_utf8_lossy(&cmd_out.stdout);
+        let cmd = cmd.trim();
+
+        if !cmd.is_empty() {
+            // Extract basename of first token (before any space/args)
+            let exe = cmd.split_whitespace().next().unwrap_or(cmd);
+            let basename = exe.rsplit('/').next().unwrap_or(exe);
+            for &term in KNOWN_TERMINALS {
+                if basename.eq_ignore_ascii_case(term) {
+                    return Some(term.to_string());
+                }
+            }
+            // Also check if the full path contains a .app bundle name
+            for &term in KNOWN_TERMINALS {
+                if cmd.contains(&format!("{}.app", term)) {
+                    return Some(term.to_string());
+                }
+            }
+        }
+
+        if ppid == 0 || ppid == 1 { break; }
+        pid = ppid;
+    }
+    None
+}
+
+// ── Tauri Commands — Antigravity ─────────────────────────────────────────────
+
+#[tauri::command]
+fn antigravity_status() -> serde_json::Value {
+    let all_pids = find_all_pids();
+    let running = !all_pids.is_empty();
+    let main_pid: Option<u32> = if running {
+        find_main_pid(&all_pids).or_else(|| all_pids.first().copied())
+    } else {
+        None
+    };
+    let installed = std::path::Path::new(ANTIGRAVITY_APP_PATH).exists();
+    serde_json::json!({ "running": running, "pid": main_pid, "all_pids": all_pids, "installed": installed })
+}
+
+#[tauri::command]
+fn antigravity_launch() -> Result<serde_json::Value, String> {
+    use std::os::unix::process::CommandExt;
+    let mut cmd = Command::new(ANTIGRAVITY_MACOS_BIN);
+    unsafe {
+        cmd.pre_exec(|| { libc::setsid(); Ok(()) });
+    }
+    let child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to launch Antigravity: {e}"))?;
+    let pid = child.id();
+    drop(child);
+    Ok(serde_json::json!({ "ok": true, "pid": pid }))
+}
+
+#[tauri::command]
+fn antigravity_quit() -> Result<serde_json::Value, String> {
+    let all_pids = find_all_pids();
+    if all_pids.is_empty() {
+        return Ok(serde_json::json!({ "ok": true, "method": "not_running" }));
+    }
+    let killed_pid = if let Some(main_pid) = find_main_pid(&all_pids) {
+        kill_pid(main_pid);
+        main_pid
+    } else {
+        for pid in &all_pids { kill_pid(*pid); }
+        *all_pids.first().unwrap()
+    };
+    Ok(serde_json::json!({ "ok": true, "method": "kill_main", "pid": killed_pid }))
+}
+
+#[tauri::command]
+fn antigravity_restart() -> Result<serde_json::Value, String> {
+    let all_pids = find_all_pids();
+    if !all_pids.is_empty() {
+        if let Some(main_pid) = find_main_pid(&all_pids) {
+            kill_pid(main_pid);
+        } else {
+            for pid in &all_pids { kill_pid(*pid); }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+    }
+    antigravity_launch()
+}
+
+// ── Tauri Commands — n9router process ────────────────────────────────────────
+
 #[tauri::command]
 fn n9router_status() -> serde_json::Value {
     let pid = find_n9router_pid();
     let installed = is_n9router_installed();
+    // Check if the running pid matches our managed process
+    let managed = {
+        let guard = N9_MANAGED.lock().unwrap();
+        guard.as_ref().map(|m| m.pid) == pid && pid.is_some()
+    };
     serde_json::json!({
         "running": pid.is_some(),
         "pid": pid,
         "installed": installed,
+        "managed": managed,
     })
 }
 
@@ -279,34 +300,64 @@ fn n9router_status() -> serde_json::Value {
 fn n9router_start() -> Result<serde_json::Value, String> {
     use std::os::unix::process::CommandExt;
 
-    if find_n9router_pid().is_some() {
-        return Ok(serde_json::json!({ "ok": true, "method": "already_running" }));
+    if let Some(pid) = find_n9router_pid() {
+        return Ok(serde_json::json!({ "ok": true, "method": "already_running", "pid": pid }));
     }
-
     if !is_n9router_installed() {
         return Err("n9router CLI not found. Install with: npm i -g n9router".into());
     }
 
-    let mut cmd = Command::new(N9ROUTER_BIN);
-    // Detach: create new session so n9router outlives the tray process
-    unsafe {
-        cmd.pre_exec(|| {
-            libc::setsid();
-            Ok(())
-        });
-    }
+    // Pipe stdout+stderr into our ring buffer
+    let ring: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::with_capacity(LOG_RING_CAPACITY)));
+    let ring_clone = ring.clone();
 
-    let child = cmd
+    let mut cmd = Command::new(N9ROUTER_BIN);
+    // New session so n9router outlives tray; but we still pipe its output
+    unsafe {
+        cmd.pre_exec(|| { libc::setsid(); Ok(()) });
+    }
+    let mut child = cmd
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to start n9router: {e}"))?;
 
     let pid = child.id();
-    drop(child);
 
-    Ok(serde_json::json!({ "ok": true, "pid": pid }))
+    // Drain stdout in a background thread
+    if let Some(stdout) = child.stdout.take() {
+        let r = ring_clone.clone();
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines().flatten() {
+                let mut buf = r.lock().unwrap();
+                if buf.len() >= LOG_RING_CAPACITY { buf.pop_front(); }
+                buf.push_back(line);
+            }
+        });
+    }
+    // Drain stderr in another thread
+    if let Some(stderr) = child.stderr.take() {
+        let r = ring_clone.clone();
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().flatten() {
+                let mut buf = r.lock().unwrap();
+                if buf.len() >= LOG_RING_CAPACITY { buf.pop_front(); }
+                buf.push_back(format!("[stderr] {}", line));
+            }
+        });
+    }
+
+    // Store managed process state (drop child handle so process continues)
+    drop(child);
+    {
+        let mut guard = N9_MANAGED.lock().unwrap();
+        *guard = Some(ManagedProcess { pid, lines: ring });
+    }
+
+    Ok(serde_json::json!({ "ok": true, "pid": pid, "managed": true }))
 }
 
 #[tauri::command]
@@ -315,11 +366,127 @@ fn n9router_stop() -> Result<serde_json::Value, String> {
     match pid {
         None => Ok(serde_json::json!({ "ok": true, "method": "not_running" })),
         Some(p) => {
-            // Send SIGTERM for graceful shutdown
             kill_pid(p);
+            // Clear managed state
+            let mut guard = N9_MANAGED.lock().unwrap();
+            *guard = None;
             Ok(serde_json::json!({ "ok": true, "method": "sigterm", "pid": p }))
         }
     }
+}
+
+/// Return last `count` log lines.
+/// - If n9router is managed by the tray: return from ring buffer
+/// - Otherwise: tail ~/.n9router/log.txt
+#[tauri::command]
+fn n9router_get_logs(count: Option<usize>) -> serde_json::Value {
+    let count = count.unwrap_or(200).min(LOG_RING_CAPACITY);
+    let all_pids = find_n9router_pids();
+    let any_running = !all_pids.is_empty();
+
+    let guard = N9_MANAGED.lock().unwrap();
+    let managed_pid = guard.as_ref().map(|m| m.pid);
+    let managed_matches = managed_pid.map(|mp| all_pids.contains(&mp)).unwrap_or(false);
+
+    if managed_matches {
+        // Return from ring buffer
+        let buf = guard.as_ref().unwrap().lines.lock().unwrap();
+        let lines: Vec<String> = buf.iter().rev().take(count).rev().cloned().collect();
+        serde_json::json!({
+            "managed": true,
+            "pid": managed_pid,
+            "lines": lines,
+            "source": "managed",
+        })
+
+    } else {
+        // External process — tail log file
+        drop(guard);
+        let first_pid = all_pids.first().copied();
+        let lines = tail_log_file(count);
+        serde_json::json!({
+            "managed": false,
+            "pid": first_pid,
+            "running": any_running,
+            "lines": lines,
+            "source": "log_file",
+        })
+    }
+}
+
+/// If n9router is externally managed, try to find and focus its parent terminal.
+/// Tries ALL pids on the port — prefers the one with a terminal ancestor.
+/// Returns { ok, app } on success or { ok: false, fallback: "log_file", reason } on failure.
+#[tauri::command]
+fn n9router_focus_terminal() -> serde_json::Value {
+    let all_pids = find_n9router_pids();
+    if all_pids.is_empty() {
+        return serde_json::json!({ "ok": false, "reason": "n9router not running" });
+    }
+
+    // Try each pid to find one with a terminal ancestor
+    for &pid in &all_pids {
+        if let Some(app_name) = find_terminal_ancestor(pid) {
+            let script = format!("tell application \"{}\" to activate", app_name);
+            let result = Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .output();
+            match result {
+                Ok(o) if o.status.success() => {
+                    return serde_json::json!({ "ok": true, "app": app_name, "pid": pid });
+                }
+                Ok(o) => {
+                    let err = String::from_utf8_lossy(&o.stderr).to_string();
+                    return serde_json::json!({
+                        "ok": false,
+                        "fallback": "log_file",
+                        "reason": format!("AppleScript failed: {}", err)
+                    });
+                }
+                Err(e) => {
+                    return serde_json::json!({
+                        "ok": false,
+                        "fallback": "log_file",
+                        "reason": format!("osascript error: {}", e)
+                    });
+                }
+            }
+        }
+    }
+
+    serde_json::json!({
+        "ok": false,
+        "fallback": "log_file",
+        "reason": format!("No terminal ancestor found in {} PIDs (started via launchd or non-terminal)", all_pids.len()),
+    })
+}
+
+/// Open (or focus) the floating terminal log window
+#[tauri::command]
+fn open_terminal_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("terminal") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    let _win = tauri::WebviewWindowBuilder::new(
+        &app,
+        "terminal",
+        tauri::WebviewUrl::App("index.html#terminal".into()),
+    )
+    .title("n9router Logs")
+    .inner_size(700.0, 450.0)
+    .min_inner_size(480.0, 300.0)
+    .resizable(true)
+    .decorations(true)
+    .always_on_top(false)
+    .center()
+    .build()
+    .map_err(|e| format!("Failed to open terminal window: {e}"))?;
+
+    Ok(())
 }
 
 // ── App Entry ────────────────────────────────────────────────────────────────
@@ -330,6 +497,7 @@ pub fn run() {
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             antigravity_status,
             antigravity_launch,
@@ -338,15 +506,16 @@ pub fn run() {
             n9router_status,
             n9router_start,
             n9router_stop,
+            n9router_get_logs,
+            n9router_focus_terminal,
+            open_terminal_window,
         ])
         .setup(|app| {
-            // ── macOS: hide from Dock ──
             #[cfg(target_os = "macos")]
             {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             }
 
-            // ── Right-click context menu ──
             let quit_item = MenuItemBuilder::with_id("quit", "Quit n9 Control").build(app)?;
             let dashboard_item =
                 MenuItemBuilder::with_id("dashboard", "Open Dashboard").build(app)?;
@@ -356,7 +525,6 @@ pub fn run() {
                 .item(&quit_item)
                 .build()?;
 
-            // ── Tray icon ──
             let tray_icon = TrayIconBuilder::new()
                 .icon(Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?)
                 .icon_as_template(true)
@@ -364,12 +532,8 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    "dashboard" => {
-                        let _ = open::that("http://localhost:20128/dashboard");
-                    }
+                    "quit" => { app.exit(0); }
+                    "dashboard" => { let _ = open::that("http://localhost:20128/dashboard"); }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -396,7 +560,6 @@ pub fn run() {
 
             app.manage(tray_icon);
 
-            // ── Blur-hide ──
             if let Some(window) = app.get_webview_window("main") {
                 let win = window.clone();
                 window.on_window_event(move |event| {
