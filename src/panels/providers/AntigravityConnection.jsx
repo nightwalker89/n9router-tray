@@ -102,12 +102,9 @@ export default function AntigravityConnection({ conn, quota, healthEvents, onTog
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {conn.name || displayEmail(conn.email, maskEmails) || conn.id.slice(0, 8)}
+              {displayEmail(conn.email, maskEmails) || conn.id.slice(0, 8)}
             </span>
             <AccountTypeBadge type={conn.accountType || quota?.plan} />
-          </div>
-          <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1 }}>
-            {displayEmail(conn.email, maskEmails) || conn.authType}
           </div>
           {/* Inline Sonnet 4.6 quota bar when collapsed */}
           {!expanded && highlight && <QuotaSummaryInline q={highlight} />}
