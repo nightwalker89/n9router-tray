@@ -14,7 +14,7 @@ use tauri_plugin_positioner::{Position, WindowExt};
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const ANTIGRAVITY_APP_PATH: &str = "/Applications/Antigravity.app";
-const ANTIGRAVITY_MACOS_BIN: &str = "/Applications/Antigravity.app/Contents/MacOS/Antigravity";
+const ANTIGRAVITY_MACOS_BIN: &str = "/Applications/Antigravity.app/Contents/MacOS/Electron";
 const ANTIGRAVITY_BUNDLE_TERM: &str = "Antigravity.app/Contents/MacOS";
 const N9ROUTER_BIN: &str = "n9router";
 const N9ROUTER_PORT: u16 = 20128;
