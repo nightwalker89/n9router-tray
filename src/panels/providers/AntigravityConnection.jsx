@@ -14,9 +14,14 @@ import {
 } from "./shared";
 
 const HIGHLIGHT_KEY = "claude-sonnet-4-6";
+const FLASH_HIGHLIGHT_TERM = "flash";
 
 function getHighlightQuota(quotas) {
   return quotas.find(q => q.key === HIGHLIGHT_KEY || q.key?.includes("sonnet")) || quotas[0] || null;
+}
+
+function getFlashQuota(quotas) {
+  return quotas.find(q => q.key?.toLowerCase().includes(FLASH_HIGHLIGHT_TERM)) || null;
 }
 
 // ── Health dot colors (same logic as TokenSwapPoolCard) ─────────────────────
@@ -87,7 +92,8 @@ export default function AntigravityConnection({ conn, quota, healthEvents, onTog
   const [expanded, setExpanded] = useState(false);
   const allQuotas = quota?.quotas || [];
   const highlight = getHighlightQuota(allQuotas);
-  const hasDetail = highlight || healthEvents?.length > 0;
+  const flashQuota = getFlashQuota(allQuotas);
+  const hasDetail = highlight || flashQuota || healthEvents?.length > 0;
 
   return (
     <div style={{ borderBottom: "1px solid var(--border-light)" }}>
@@ -108,6 +114,8 @@ export default function AntigravityConnection({ conn, quota, healthEvents, onTog
           </div>
           {/* Inline Sonnet 4.6 quota bar when collapsed */}
           {!expanded && highlight && <QuotaSummaryInline q={highlight} />}
+          {/* Inline Flash 3.5 quota bar when collapsed */}
+          {!expanded && flashQuota && <QuotaSummaryInline q={flashQuota} />}
           {/* Compact health dots when collapsed */}
           {!expanded && healthEvents?.length > 0 && <HealthDotStrip events={healthEvents} compact />}
         </div>
@@ -123,13 +131,27 @@ export default function AntigravityConnection({ conn, quota, healthEvents, onTog
         <div className="provider-accounts" style={{ padding: "6px 12px 10px 26px", background: "rgba(0,0,0,0.15)" }}>
           {/* Sonnet 4.6 quota */}
           {highlight && (
-            <div style={{ marginBottom: healthEvents?.length ? 8 : 0 }}>
+            <div style={{ marginBottom: (flashQuota || healthEvents?.length) ? 8 : 0 }}>
               <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.05em", marginBottom: 4, textTransform: "uppercase" }}>
                 Sonnet 4.6 Quota
               </div>
               <QuotaBar q={highlight} showUsed />
               {highlight.resetAt && (() => {
                 const r = formatResetTime(highlight.resetAt);
+                return r ? <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 2 }}>Reset in {r}</div> : null;
+              })()}
+            </div>
+          )}
+
+          {/* Flash 3.5 quota */}
+          {flashQuota && (
+            <div style={{ marginBottom: healthEvents?.length ? 8 : 0 }}>
+              <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-tertiary)", letterSpacing: "0.05em", marginBottom: 4, textTransform: "uppercase" }}>
+                Flash 3.5 Quota
+              </div>
+              <QuotaBar q={flashQuota} showUsed />
+              {flashQuota.resetAt && (() => {
+                const r = formatResetTime(flashQuota.resetAt);
                 return r ? <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 2 }}>Reset in {r}</div> : null;
               })()}
             </div>
