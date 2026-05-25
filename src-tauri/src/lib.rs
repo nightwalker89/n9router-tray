@@ -13,12 +13,64 @@ use tauri_plugin_positioner::{Position, WindowExt};
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const ANTIGRAVITY_APP_PATH: &str = "/Applications/Antigravity.app";
-const ANTIGRAVITY_MACOS_BIN: &str = "/Applications/Antigravity.app/Contents/MacOS/Electron";
-const ANTIGRAVITY_BUNDLE_TERM: &str = "Antigravity.app/Contents/MacOS";
 const N9ROUTER_BIN: &str = "n9router";
 const N9ROUTER_PORT: u16 = 20128;
 const LOG_RING_CAPACITY: usize = 2000;
+
+// ── AGY App Targets ─────────────────────────────────────────────────────────
+
+struct AppTarget {
+    id: &'static str,
+    label: &'static str,
+    app_path: &'static str,
+    binary: &'static str,
+    bundle_term: &'static str,
+}
+
+const AGY_TARGETS: &[AppTarget] = &[
+    AppTarget {
+        id: "antigravity-app",
+        label: "AGYv1",
+        app_path: "/Applications/Antigravity.app",
+        binary: "/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity",
+        bundle_term: "Antigravity.app/Contents/MacOS",
+    },
+    AppTarget {
+        id: "antigravity-app-v2",
+        label: "AGYv2",
+        app_path: "/Applications/Antigravity.app",
+        binary: "/Applications/Antigravity.app/Contents/MacOS/Antigravity",
+        bundle_term: "Antigravity.app/Contents/MacOS",
+    },
+    AppTarget {
+        id: "antigravity-ide",
+        label: "AGY IDE",
+        app_path: "/Applications/Antigravity IDE.app",
+        binary: "/Applications/Antigravity IDE.app/Contents/Resources/app/bin/antigravity-ide",
+        bundle_term: "Antigravity IDE.app/Contents/MacOS",
+    },
+];
+
+fn is_target_installed(target: &AppTarget) -> bool {
+    use std::path::Path;
+    match target.id {
+        "antigravity-app" => {
+            Path::new(target.app_path).exists()
+                && Path::new("/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity").exists()
+        }
+        "antigravity-app-v2" => {
+            Path::new(target.app_path).exists()
+                && Path::new("/Applications/Antigravity.app/Contents/Resources/app.asar").exists()
+                && !Path::new("/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity").exists()
+        }
+        "antigravity-ide" => Path::new(target.app_path).exists(),
+        _ => false,
+    }
+}
+
+fn find_target(id: &str) -> Option<&'static AppTarget> {
+    AGY_TARGETS.iter().find(|t| t.id == id)
+}
 
 /// Known terminal apps (the comm basename we look for in the ppid chain)
 const KNOWN_TERMINALS: &[&str] = &[
@@ -55,9 +107,9 @@ fn is_main_process(ppid: u32, comm: &str) -> bool {
         && !comm.contains("chrome_crashpad_handler")
 }
 
-fn find_all_pids() -> Vec<u32> {
+fn find_all_pids_for(bundle_term: &str) -> Vec<u32> {
     let output = match Command::new("pgrep")
-        .args(["-f", ANTIGRAVITY_BUNDLE_TERM])
+        .args(["-f", bundle_term])
         .output()
     {
         Ok(o) => o,
@@ -217,22 +269,54 @@ fn find_terminal_ancestor(start_pid: u32) -> Option<String> {
 // ── Tauri Commands — Antigravity ─────────────────────────────────────────────
 
 #[tauri::command]
-fn antigravity_status() -> serde_json::Value {
-    let all_pids = find_all_pids();
+fn antigravity_list_targets() -> serde_json::Value {
+    let targets: Vec<serde_json::Value> = AGY_TARGETS.iter().map(|t| {
+        let installed = is_target_installed(t);
+        let all_pids = if installed { find_all_pids_for(t.bundle_term) } else { vec![] };
+        let running = !all_pids.is_empty();
+        let main_pid: Option<u32> = if running {
+            find_main_pid(&all_pids).or_else(|| all_pids.first().copied())
+        } else {
+            None
+        };
+        serde_json::json!({
+            "id": t.id,
+            "label": t.label,
+            "installed": installed,
+            "running": running,
+            "pid": main_pid,
+            "all_pids": all_pids,
+        })
+    }).collect();
+    serde_json::json!({ "targets": targets })
+}
+
+#[tauri::command]
+fn antigravity_status(target_id: String) -> serde_json::Value {
+    let target = match find_target(&target_id) {
+        Some(t) => t,
+        None => return serde_json::json!({ "error": "unknown target", "running": false, "installed": false }),
+    };
+    let installed = is_target_installed(target);
+    let all_pids = if installed { find_all_pids_for(target.bundle_term) } else { vec![] };
     let running = !all_pids.is_empty();
     let main_pid: Option<u32> = if running {
         find_main_pid(&all_pids).or_else(|| all_pids.first().copied())
     } else {
         None
     };
-    let installed = std::path::Path::new(ANTIGRAVITY_APP_PATH).exists();
-    serde_json::json!({ "running": running, "pid": main_pid, "all_pids": all_pids, "installed": installed })
+    serde_json::json!({ "id": target.id, "running": running, "pid": main_pid, "all_pids": all_pids, "installed": installed })
 }
 
 #[tauri::command]
-fn antigravity_launch() -> Result<serde_json::Value, String> {
+fn antigravity_launch(target_id: String) -> Result<serde_json::Value, String> {
+    let target = find_target(&target_id)
+        .ok_or_else(|| format!("Unknown target: {}", target_id))?;
+    if !is_target_installed(target) {
+        return Err(format!("{} is not installed", target.label));
+    }
     use std::os::unix::process::CommandExt;
-    let mut cmd = Command::new(ANTIGRAVITY_MACOS_BIN);
+    let mut cmd = Command::new(target.binary);
     unsafe {
         cmd.pre_exec(|| { libc::setsid(); Ok(()) });
     }
@@ -241,17 +325,19 @@ fn antigravity_launch() -> Result<serde_json::Value, String> {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| format!("Failed to launch Antigravity: {e}"))?;
+        .map_err(|e| format!("Failed to launch {}: {e}", target.label))?;
     let pid = child.id();
     drop(child);
-    Ok(serde_json::json!({ "ok": true, "pid": pid }))
+    Ok(serde_json::json!({ "ok": true, "pid": pid, "target": target.id }))
 }
 
 #[tauri::command]
-fn antigravity_quit() -> Result<serde_json::Value, String> {
-    let all_pids = find_all_pids();
+fn antigravity_quit(target_id: String) -> Result<serde_json::Value, String> {
+    let target = find_target(&target_id)
+        .ok_or_else(|| format!("Unknown target: {}", target_id))?;
+    let all_pids = find_all_pids_for(target.bundle_term);
     if all_pids.is_empty() {
-        return Ok(serde_json::json!({ "ok": true, "method": "not_running" }));
+        return Ok(serde_json::json!({ "ok": true, "method": "not_running", "target": target.id }));
     }
     let killed_pid = if let Some(main_pid) = find_main_pid(&all_pids) {
         kill_pid(main_pid);
@@ -260,12 +346,14 @@ fn antigravity_quit() -> Result<serde_json::Value, String> {
         for pid in &all_pids { kill_pid(*pid); }
         *all_pids.first().unwrap()
     };
-    Ok(serde_json::json!({ "ok": true, "method": "kill_main", "pid": killed_pid }))
+    Ok(serde_json::json!({ "ok": true, "method": "kill_main", "pid": killed_pid, "target": target.id }))
 }
 
 #[tauri::command]
-fn antigravity_restart() -> Result<serde_json::Value, String> {
-    let all_pids = find_all_pids();
+fn antigravity_restart(target_id: String) -> Result<serde_json::Value, String> {
+    let target = find_target(&target_id)
+        .ok_or_else(|| format!("Unknown target: {}", target_id))?;
+    let all_pids = find_all_pids_for(target.bundle_term);
     if !all_pids.is_empty() {
         if let Some(main_pid) = find_main_pid(&all_pids) {
             kill_pid(main_pid);
@@ -274,7 +362,7 @@ fn antigravity_restart() -> Result<serde_json::Value, String> {
         }
         std::thread::sleep(std::time::Duration::from_millis(2000));
     }
-    antigravity_launch()
+    antigravity_launch(target_id)
 }
 
 // ── Tauri Commands — n9router process ────────────────────────────────────────
@@ -499,6 +587,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
+            antigravity_list_targets,
             antigravity_status,
             antigravity_launch,
             antigravity_quit,

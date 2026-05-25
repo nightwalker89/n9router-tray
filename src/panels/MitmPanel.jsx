@@ -98,8 +98,8 @@ export default function MitmPanel() {
   const [pendingAction, setPendingAction] = useState(null);
 
   // Antigravity app state (polled via Rust)
-  const [agStatus, setAgStatus] = useState(null); // { running, pid, installed }
-  const [agLoading, setAgLoading] = useState(null); // "launch"|"quit"|"restart"
+  const [agTargets, setAgTargets] = useState([]); // [{ id, label, installed, running, pid }]
+  const [agLoading, setAgLoading] = useState(null); // "launch:id"|"quit:id"|"restart:id"
   const [agError, setAgError] = useState(null);
 
   // Mode A/B state
@@ -124,14 +124,28 @@ export default function MitmPanel() {
     return () => { active = false; clearInterval(id); };
   }, []);
 
-  // Poll Antigravity app status every 5s via Rust command
+  // Poll AGY targets status every 5s via n9router API
   useEffect(() => {
     let active = true;
+    const AGY_ROUTES = [
+      { id: "antigravity-app", label: "AGYv1" },
+      { id: "antigravity-app-v2", label: "AGYv2" },
+      { id: "antigravity-ide", label: "AGY IDE" },
+    ];
     const poll = async () => {
       if (!active) return;
       try {
-        const s = await invoke("antigravity_status");
-        if (active) setAgStatus(s);
+        const results = await Promise.all(
+          AGY_ROUTES.map(async (r) => {
+            try {
+              const data = await api.getAgyStatus(r.id);
+              return { id: r.id, label: r.label, installed: data.installed, running: data.running, pid: data.pids?.[0] || null };
+            } catch {
+              return { id: r.id, label: r.label, installed: false, running: false, pid: null };
+            }
+          })
+        );
+        if (active) setAgTargets(results);
       } catch { /* ignore */ }
     };
     poll();
@@ -200,21 +214,36 @@ export default function MitmPanel() {
   }, [status, handleAction]);
 
   // ── Antigravity App Actions (via Rust) ────────────────────────────────────
-  const handleAgAction = useCallback(async (action) => {
+  const handleAgAction = useCallback(async (action, targetId) => {
     setAgError(null);
-    setAgLoading(action);
+    const loadingKey = `${action}:${targetId}`;
+    setAgLoading(loadingKey);
     try {
       if (action === "launch") {
-        await invoke("antigravity_launch");
+        await invoke("antigravity_launch", { "targetId": targetId });
       } else if (action === "quit") {
-        await invoke("antigravity_quit");
+        await invoke("antigravity_quit", { "targetId": targetId });
       } else if (action === "restart") {
-        await invoke("antigravity_restart");
+        await invoke("antigravity_restart", { "targetId": targetId });
       }
-      // Refresh status after brief delay
       setTimeout(async () => {
-        const s = await invoke("antigravity_status");
-        setAgStatus(s);
+        try {
+          const results = await Promise.all(
+            [
+              { id: "antigravity-app", label: "AGYv1" },
+              { id: "antigravity-app-v2", label: "AGYv2" },
+              { id: "antigravity-ide", label: "AGY IDE" },
+            ].map(async (r) => {
+              try {
+                const data = await api.getAgyStatus(r.id);
+                return { id: r.id, label: r.label, installed: data.installed, running: data.running, pid: data.pids?.[0] || null };
+              } catch {
+                return { id: r.id, label: r.label, installed: false, running: false, pid: null };
+              }
+            })
+          );
+          setAgTargets(results);
+        } catch { /* ignore */ }
         setAgLoading(null);
       }, 1200);
     } catch (e) {
@@ -233,9 +262,6 @@ export default function MitmPanel() {
       </div>
     );
   }
-
-  const agRunning = agStatus?.running;
-  const agInstalled = agStatus?.installed !== false;
 
   return (
     <div>
@@ -295,63 +321,61 @@ export default function MitmPanel() {
       </div>
 
       {/* ── Antigravity App Controls ── */}
-      {agInstalled && (
+      {agTargets.filter(t => t.installed).length > 0 && (
         <div className="section">
-          <div className="section-header">Antigravity App</div>
-          <div className="card">
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <AntigravityIcon size={28} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>Antigravity</div>
-                <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                  {agStatus === null ? "Checking..." : agRunning ? `Running · PID ${agStatus?.pid || "—"}` : "Not running"}
+          <div className="section-header">Antigravity Apps</div>
+          {agError && (
+            <div className="error-banner" style={{ marginBottom: 8 }}>
+              <span>⚠️</span><span>{agError}</span>
+            </div>
+          )}
+          {agTargets.filter(t => t.installed).map((target) => (
+            <div className="card" key={target.id} style={{ marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <AntigravityIcon size={28} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{target.label}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
+                    {target.running ? `Running · PID ${target.pid || "—"}` : "Not running"}
+                  </div>
                 </div>
-              </div>
-              {agStatus !== null && (
-                agRunning ? (
+                {target.running ? (
                   <span className="badge green"><span className="dot pulse" /> On</span>
                 ) : (
                   <span className="badge gray">Off</span>
-                )
-              )}
-            </div>
-
-            {agError && (
-              <div className="error-banner" style={{ marginBottom: 8 }}>
-                <span>⚠️</span><span>{agError}</span>
+                )}
               </div>
-            )}
 
-            {/* Action buttons */}
-            <div style={{ display: "flex", gap: 6 }}>
-              {!agRunning ? (
-                <button
-                  className="ag-btn ag-btn-green"
-                  onClick={() => handleAgAction("launch")}
-                  disabled={!!agLoading}
-                >
-                  {agLoading === "launch" ? <span className="spinner" /> : "▶ Launch"}
-                </button>
-              ) : (
-                <>
+              <div style={{ display: "flex", gap: 6 }}>
+                {!target.running ? (
                   <button
-                    className="ag-btn ag-btn-yellow"
-                    onClick={() => handleAgAction("restart")}
+                    className="ag-btn ag-btn-green"
+                    onClick={() => handleAgAction("launch", target.id)}
                     disabled={!!agLoading}
                   >
-                    {agLoading === "restart" ? <span className="spinner" /> : "↺ Restart"}
+                    {agLoading === `launch:${target.id}` ? <span className="spinner" /> : "▶ Launch"}
                   </button>
-                  <button
-                    className="ag-btn ag-btn-red"
-                    onClick={() => handleAgAction("quit")}
-                    disabled={!!agLoading}
-                  >
-                    {agLoading === "quit" ? <span className="spinner" /> : "■ Quit"}
-                  </button>
-                </>
-              )}
+                ) : (
+                  <>
+                    <button
+                      className="ag-btn ag-btn-yellow"
+                      onClick={() => handleAgAction("restart", target.id)}
+                      disabled={!!agLoading}
+                    >
+                      {agLoading === `restart:${target.id}` ? <span className="spinner" /> : "↺ Restart"}
+                    </button>
+                    <button
+                      className="ag-btn ag-btn-red"
+                      onClick={() => handleAgAction("quit", target.id)}
+                      disabled={!!agLoading}
+                    >
+                      {agLoading === `quit:${target.id}` ? <span className="spinner" /> : "■ Quit"}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       )}
 

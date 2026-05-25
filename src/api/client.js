@@ -92,6 +92,9 @@ export const api = {
   toggleDNS: (tool, action, sudoPassword) =>
     request("PATCH", "/api/cli-tools/antigravity-mitm", { tool, action, sudoPassword }),
 
+  // AGY App Status (from n9router API)
+  getAgyStatus: (targetId) => request("GET", `/api/${targetId}`),
+
   // Settings (auth required)
   getSettings: () => authRequest("GET", "/api/settings"),
   updateSettings: (body) => authRequest("PATCH", "/api/settings", body),
