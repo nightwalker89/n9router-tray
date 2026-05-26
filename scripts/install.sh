@@ -1,10 +1,10 @@
 #!/bin/bash
-# Install n9router tray — download latest release DMG and extract to ~/.n9tray
+# Install n9router tray — download latest release DMG and install to /Applications
 # Usage: curl -fsSL https://raw.githubusercontent.com/nightwalker89/n9router-tray/main/scripts/install.sh | bash
 set -euo pipefail
 
 REPO="nightwalker89/n9router-tray"
-INSTALL_DIR="$HOME/.n9tray"
+INSTALL_DIR="/Applications"
 TMP_DIR=$(mktemp -d)
 
 info()  { echo -e "\033[1;34m[n9tray]\033[0m $*"; }
@@ -31,8 +31,6 @@ info "Downloading $DMG_NAME ($TAG)..."
 curl -fsSL -o "$TMP_DIR/$DMG_NAME" "$DMG_URL" || die "Download failed"
 
 info "Installing to $INSTALL_DIR..."
-mkdir -p "$INSTALL_DIR"
-
 MOUNT_POINT="$TMP_DIR/dmg-mount"
 hdiutil attach "$TMP_DIR/$DMG_NAME" -mountpoint "$MOUNT_POINT" -nobrowse -quiet || die "Failed to mount DMG"
 
@@ -51,7 +49,7 @@ xattr -cr "$INSTALL_DIR/$APP_NAME" 2>/dev/null || true
 ok "Installed: $INSTALL_DIR/$APP_NAME"
 ok ""
 ok "Launch with:"
-ok "  open -a \"$INSTALL_DIR/$APP_NAME\""
+ok "  open -a \"$APP_NAME\""
 ok ""
 ok "Or install the CLI for easier access:"
 ok "  npm i -g n9tray"
