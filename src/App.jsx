@@ -106,7 +106,11 @@ function StatusBar() {
           <div className="status-bar-left">
             <div className={`status-bar-dot ${running ? "online" : "offline"}`} />
             <span className="status-bar-label">
-              {status === null ? "..." : running ? `n9router · PID ${pid}` : "n9router offline"}
+              {status === null ? "..." : running
+                ? `n9router${status.version ? ` v${status.version}` : ""} · PID ${pid}`
+                : status.installed === false
+                  ? "n9router not installed"
+                  : `n9router${status.version ? ` v${status.version}` : ""} · offline`}
             </span>
           </div>
           <div className="status-bar-right">

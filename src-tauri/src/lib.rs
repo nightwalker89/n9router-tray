@@ -250,15 +250,9 @@ fn find_n9router_pid() -> Option<u32> {
 }
 
 fn find_n9router_bin() -> Option<String> {
-    // Try PATH first
-    if let Ok(o) = Command::new("which").arg(N9ROUTER_BIN).output() {
-        if o.status.success() {
-            let p = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if !p.is_empty() { return Some(p); }
-        }
-    }
     let home = std::env::var("HOME").unwrap_or_default();
-    // Check nvm versions
+
+    // 1. Check nvm versions (most common for node global installs on macOS)
     let nvm_base = format!("{}/.nvm/versions/node", home);
     if let Ok(entries) = std::fs::read_dir(&nvm_base) {
         for entry in entries.flatten() {
@@ -266,16 +260,37 @@ fn find_n9router_bin() -> Option<String> {
             if bin.exists() { return Some(bin.to_string_lossy().to_string()); }
         }
     }
-    // Static paths
+
+    // 2. Common static paths
     let candidates = [
         format!("{}/.local/bin/n9router", home),
         "/opt/homebrew/bin/n9router".to_string(),
         "/usr/local/bin/n9router".to_string(),
+        format!("{}/.bun/bin/n9router", home),
     ];
     for path in &candidates {
         if std::path::Path::new(path).exists() { return Some(path.clone()); }
     }
+
+    // 3. Fallback: try `which` (works if launched from terminal)
+    if let Ok(o) = Command::new("which").arg(N9ROUTER_BIN).output() {
+        if o.status.success() {
+            let p = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if !p.is_empty() { return Some(p); }
+        }
+    }
+
     None
+}
+
+fn get_n9router_version(bin_path: &str) -> Option<String> {
+    Command::new(bin_path)
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 fn is_n9router_installed() -> bool {
@@ -443,7 +458,9 @@ fn antigravity_restart(target_id: String) -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn n9router_status() -> serde_json::Value {
     let pid = find_n9router_pid();
-    let installed = is_n9router_installed();
+    let bin_path = find_n9router_bin();
+    let installed = bin_path.is_some();
+    let version = bin_path.as_deref().and_then(get_n9router_version);
     // Check if the running pid matches our managed process
     let managed = {
         let guard = N9_MANAGED.lock().unwrap();
@@ -454,6 +471,8 @@ fn n9router_status() -> serde_json::Value {
         "pid": pid,
         "installed": installed,
         "managed": managed,
+        "version": version,
+        "binPath": bin_path,
     })
 }
 
