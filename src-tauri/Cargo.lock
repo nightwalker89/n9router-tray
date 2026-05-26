@@ -2102,7 +2102,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "n9-control"
+name = "n9router-tray"
 version = "0.1.0"
 dependencies = [
  "libc",

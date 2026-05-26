@@ -1,5 +1,5 @@
 [package]
-name = "n9-control"
+name = "n9router-tray"
 version = "0.1.0"
 description = "n9router menu bar control panel"
 authors = ["cuongquach"]
