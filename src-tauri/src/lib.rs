@@ -60,9 +60,8 @@ fn is_verbose_logging_enabled() -> bool {
 }
 
 fn debug(msg: &str) {
-    if is_verbose_logging_enabled() {
-        write_debug_log(msg);
-    }
+    // Always log when called — verbose check is done at call site for optional logs
+    write_debug_log(msg);
 }
 
 // ── AGY App Targets ─────────────────────────────────────────────────────────
@@ -249,38 +248,33 @@ fn find_n9router_pid() -> Option<u32> {
     pids.into_iter().next()
 }
 
-fn find_n9router_bin() -> Option<String> {
-    let home = std::env::var("HOME").unwrap_or_default();
+// ── Cached n9router binary path ─────────────────────────────────────────────
 
-    // 1. Check nvm versions (most common for node global installs on macOS)
-    let nvm_base = format!("{}/.nvm/versions/node", home);
-    if let Ok(entries) = std::fs::read_dir(&nvm_base) {
-        for entry in entries.flatten() {
-            let bin = entry.path().join("bin/n9router");
-            if bin.exists() { return Some(bin.to_string_lossy().to_string()); }
-        }
-    }
+static N9_BIN_CACHE: Lazy<Mutex<Option<String>>> = Lazy::new(|| {
+    let bin = find_n9router_bin_inner();
+    debug(&format!("n9router binary resolved: {:?}", bin));
+    Mutex::new(bin)
+});
 
-    // 2. Common static paths
-    let candidates = [
-        format!("{}/.local/bin/n9router", home),
-        "/opt/homebrew/bin/n9router".to_string(),
-        "/usr/local/bin/n9router".to_string(),
-        format!("{}/.bun/bin/n9router", home),
-    ];
-    for path in &candidates {
-        if std::path::Path::new(path).exists() { return Some(path.clone()); }
-    }
+fn find_n9router_bin_inner() -> Option<String> {
+    let path_env = std::env::var("PATH").unwrap_or_default();
+    debug(&format!("find_n9router_bin: PATH={}", path_env));
 
-    // 3. Fallback: try `which` (works if launched from terminal)
+    // fix_path_env::fix() already injected the shell's $PATH, so `which` works
     if let Ok(o) = Command::new("which").arg(N9ROUTER_BIN).output() {
-        if o.status.success() {
-            let p = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if !p.is_empty() { return Some(p); }
+        let stdout = String::from_utf8_lossy(&o.stdout).trim().to_string();
+        debug(&format!("find_n9router_bin: which status={} stdout={}", o.status.success(), stdout));
+        if o.status.success() && !stdout.is_empty() {
+            return Some(stdout);
         }
     }
 
+    debug("find_n9router_bin: NOT FOUND");
     None
+}
+
+fn find_n9router_bin() -> Option<String> {
+    N9_BIN_CACHE.lock().unwrap().clone()
 }
 
 fn get_n9router_version(bin_path: &str) -> Option<String> {
@@ -289,12 +283,14 @@ fn get_n9router_version(bin_path: &str) -> Option<String> {
         .output()
         .ok()
         .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .map(|o| {
+            let raw = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            // Strip prefix like "n9router v" or "n9router " to get just the version
+            let v = raw.strip_prefix("n9router").unwrap_or(&raw).trim();
+            let v = v.strip_prefix('v').unwrap_or(v);
+            v.to_string()
+        })
         .filter(|v| !v.is_empty())
-}
-
-fn is_n9router_installed() -> bool {
-    find_n9router_bin().is_some()
 }
 
 /// Tail the last `count` lines from ~/.n9router/log.txt
@@ -693,6 +689,9 @@ fn open_terminal_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Fix PATH for macOS GUI apps that don't inherit shell environment
+    let _ = fix_path_env::fix();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())

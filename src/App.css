@@ -89,6 +89,14 @@ html, body, #root {
   flex-shrink: 0;
 }
 
+.tab-bar-version {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
 .tab-button {
   -webkit-app-region: no-drag;
   display: flex;

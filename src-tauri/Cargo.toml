@@ -1,6 +1,6 @@
 [package]
 name = "n9router-tray"
-version = "0.1.0"
+version = "0.1.4"
 description = "n9router menu bar control panel"
 authors = ["cuongquach"]
 license = "MIT"
@@ -28,6 +28,7 @@ tauri-plugin-autostart = "2"
 open = "5"
 libc = "0.2"
 once_cell = "1"
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", version = "0.0.0" }
 
 [profile.release]
 strip = true

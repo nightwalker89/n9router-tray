@@ -258,6 +258,7 @@ function TabBar({ activeTab, setActiveTab }) {
   return (
     <div className="tab-bar">
       <span className="tab-bar-title">n9</span>
+      <span className="tab-bar-version">v0.1.4</span>
       {TABS.map((tab) => (
         <button
           key={tab.id}
