@@ -39,8 +39,8 @@ npm package (n9tray)
 
 Runtime flow:
   npx n9tray
-    └─ Check ~/.n9tray/n9-control.app exists?
-         ├─ YES → open -a ~/.n9tray/n9-control.app
+    └─ Check ~/.n9tray/n9router tray.app exists?
+         ├─ YES → open -a ~/.n9tray/n9router tray.app
          └─ NO  → Download from GitHub Release → extract → launch
 
 Publish flow:
