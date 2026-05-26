@@ -95,6 +95,9 @@ export const api = {
   // AGY App Status (from n9router API)
   getAgyStatus: (targetId) => request("GET", `/api/${targetId}`),
 
+  // AGY App Control (close via n9router API which handles process management better)
+  closeAgy: (targetId) => request("POST", `/api/${targetId}`, { action: "close" }),
+
   // Settings (auth required)
   getSettings: () => authRequest("GET", "/api/settings"),
   updateSettings: (body) => authRequest("PATCH", "/api/settings", body),

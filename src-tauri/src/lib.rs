@@ -43,22 +43,6 @@ fn chrono_timestamp() -> String {
     }
 }
 
-/// Check if verbose logging is enabled by reading the tray store file directly
-fn is_verbose_logging_enabled() -> bool {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let store_path = format!("{}/.n9tray/tray-settings.json", home);
-    // Also check the Tauri plugin-store location
-    let tauri_store = format!("{}/Library/Application Support/com.n9router.tray/tray-settings.json", home);
-    for path in &[&tauri_store, &store_path] {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if content.contains("\"verboseLogging\":true") || content.contains("\"verboseLogging\": true") {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 fn debug(msg: &str) {
     // Always log when called — verbose check is done at call site for optional logs
     write_debug_log(msg);

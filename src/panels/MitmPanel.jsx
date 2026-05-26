@@ -97,7 +97,7 @@ export default function MitmPanel() {
   const [password, setPassword] = useState("");
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Antigravity app state (polled via Rust)
+  // Antigravity app state (polled via n9router API)
   const [agTargets, setAgTargets] = useState([]); // [{ id, label, installed, running, pid }]
   const [agLoading, setAgLoading] = useState(null); // "launch:id"|"quit:id"|"restart:id"
   const [agError, setAgError] = useState(null);
@@ -213,7 +213,9 @@ export default function MitmPanel() {
     handleAction(`${currentlyActive ? "disable" : "enable"}:${tool}`);
   }, [status, handleAction]);
 
-  // ── Antigravity App Actions (via Rust) ────────────────────────────────────
+  // ── Antigravity App Actions ──────────────────────────────────────────────
+  // Note: launch/restart still use local Rust invokes; close (quit) uses n9router API
+  // which handles the feature better (proper process tree, cross-platform, etc.)
   const handleAgAction = useCallback(async (action, targetId) => {
     setAgError(null);
     const loadingKey = `${action}:${targetId}`;
@@ -222,7 +224,7 @@ export default function MitmPanel() {
       if (action === "launch") {
         await invoke("antigravity_launch", { "targetId": targetId });
       } else if (action === "quit") {
-        await invoke("antigravity_quit", { "targetId": targetId });
+        await api.closeAgy(targetId);
       } else if (action === "restart") {
         await invoke("antigravity_restart", { "targetId": targetId });
       }
