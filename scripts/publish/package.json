@@ -5,7 +5,7 @@
   "bin": { "n9tray": "./bin/n9tray.js" },
   "os": ["darwin"],
   "engines": { "node": ">=18" },
-  "repository": { "type": "git", "url": "https://github.com/nightwalker8x/n9router-tray" },
+  "repository": { "type": "git", "url": "https://github.com/nightwalker89/n9router-tray" },
   "license": "MIT",
   "author": "cuongquach"
 }

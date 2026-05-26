@@ -16,7 +16,7 @@ const fs = require("fs");
 const os = require("os");
 
 const APP_DIR = path.join(os.homedir(), ".n9tray");
-const APP_NAME = "n9 Control.app";
+const APP_NAME = "n9router-tray.app";
 const APP_PATH = path.join(APP_DIR, APP_NAME);
 
 const pkg = require("../package.json");
