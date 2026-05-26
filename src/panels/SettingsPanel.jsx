@@ -5,6 +5,7 @@
  * Section B: n9router settings (all from /api/settings, PATCH on change)
  */
 import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
 import { api } from "../api/client";
 
@@ -115,6 +116,7 @@ function StatusNote({ msg, isError }) {
 export default function SettingsPanel() {
   // ── Tray store state ──
   const [autoStart, setAutoStart]   = useState(false);
+  const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [storeReady, setStoreReady] = useState(false);
   const [store, setStore]           = useState(null);
 
@@ -143,6 +145,10 @@ export default function SettingsPanel() {
         setStoreReady(true);
       })
       .catch(() => setStoreReady(true));
+    // Query autostart plugin state
+    invoke("plugin:autostart|is_enabled")
+      .then(val => setLaunchAtLogin(!!val))
+      .catch(() => {});
   }, []);
 
   // ── Load n9router settings ──
@@ -165,6 +171,13 @@ export default function SettingsPanel() {
       await store.set("autoStartN9router", val);
       await store.save();
     }
+  };
+
+  const toggleLaunchAtLogin = async (val) => {
+    try {
+      await invoke(val ? "plugin:autostart|enable" : "plugin:autostart|disable");
+      setLaunchAtLogin(val);
+    } catch (e) { console.error("autostart toggle failed", e); }
   };
 
   // ── n9router patch helper (optimistic) ──
@@ -247,8 +260,15 @@ export default function SettingsPanel() {
       <SectionHeader icon="🖥️" title="Tray" />
       <div className="settings-section-body">
         <SettingRow
+          label="Launch at Login"
+          description="Start this tray app when you log in to macOS"
+        >
+          <SettingToggle checked={launchAtLogin} onChange={toggleLaunchAtLogin} disabled={!storeReady} />
+        </SettingRow>
+        <SettingRow
           label="Auto-start n9router on launch"
           description="Automatically start n9router when this tray app opens"
+          topBorder
         >
           <SettingToggle checked={autoStart} onChange={setAutoStartVal} disabled={!storeReady} />
         </SettingRow>

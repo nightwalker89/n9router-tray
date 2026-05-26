@@ -24,6 +24,7 @@ tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 tauri-plugin-shell = "2"
 tauri-plugin-http = { version = "2", features = ["default", "unsafe-headers"] }
 tauri-plugin-store = "2"
+tauri-plugin-autostart = "2"
 open = "5"
 libc = "0.2"
 once_cell = "1"
