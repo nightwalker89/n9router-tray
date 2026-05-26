@@ -117,6 +117,7 @@ export default function SettingsPanel() {
   // ── Tray store state ──
   const [autoStart, setAutoStart]   = useState(false);
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
+  const [killPort, setKillPort]     = useState(false);
   const [storeReady, setStoreReady] = useState(false);
   const [store, setStore]           = useState(null);
 
@@ -141,6 +142,8 @@ export default function SettingsPanel() {
       .then(async s => {
         const val = await s.get("autoStartN9router");
         setAutoStart(!!val);
+        const kp = await s.get("killPortBeforeStart");
+        setKillPort(!!kp);
         setStore(s);
         setStoreReady(true);
       })
@@ -178,6 +181,14 @@ export default function SettingsPanel() {
       await invoke(val ? "plugin:autostart|enable" : "plugin:autostart|disable");
       setLaunchAtLogin(val);
     } catch (e) { console.error("autostart toggle failed", e); }
+  };
+
+  const setKillPortVal = async val => {
+    setKillPort(val);
+    if (store) {
+      await store.set("killPortBeforeStart", val);
+      await store.save();
+    }
   };
 
   // ── n9router patch helper (optimistic) ──
@@ -271,6 +282,13 @@ export default function SettingsPanel() {
           topBorder
         >
           <SettingToggle checked={autoStart} onChange={setAutoStartVal} disabled={!storeReady} />
+        </SettingRow>
+        <SettingRow
+          label="Kill port before start"
+          description="Terminate any process on port 20128 before starting n9router"
+          topBorder
+        >
+          <SettingToggle checked={killPort} onChange={setKillPortVal} disabled={!storeReady} />
         </SettingRow>
       </div>
 

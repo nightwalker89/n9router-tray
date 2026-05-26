@@ -17,9 +17,13 @@ export function useAutoStart() {
         const autoStart = await store.get("autoStartN9router");
         if (!autoStart || cancelled) return;
 
+        await new Promise(r => setTimeout(r, 1500));
+        if (cancelled) return;
+
         const status = await invoke("n9router_status");
         if (!status.running && !cancelled) {
-          await invoke("n9router_start");
+          const killPort = await store.get("killPortBeforeStart");
+          await invoke("n9router_start", { force: !!killPort });
         }
       } catch (e) {
         // silently ignore — store may not exist yet, or n9router not installed

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { load } from "@tauri-apps/plugin-store";
 import { api } from "./api/client";
 import MitmPanel from "./panels/MitmPanel";
 import ProvidersPanel from "./panels/ProvidersPanel";
@@ -43,7 +44,9 @@ function StatusBar() {
     setError(null);
     setLoading("start");
     try {
-      await invoke("n9router_start");
+      const store = await load("tray-settings.json", { autoSave: false });
+      const force = await store.get("killPortBeforeStart");
+      await invoke("n9router_start", { force: !!force });
       setTimeout(async () => {
         try { setStatus(await invoke("n9router_status")); } catch {}
         setLoading(null);

@@ -385,10 +385,24 @@ fn n9router_status() -> serde_json::Value {
 }
 
 #[tauri::command]
-fn n9router_start() -> Result<serde_json::Value, String> {
+fn n9router_start(force: Option<bool>) -> Result<serde_json::Value, String> {
     use std::os::unix::process::CommandExt;
 
-    if let Some(pid) = find_n9router_pid() {
+    let force = force.unwrap_or(false);
+
+    if force {
+        let pids = find_n9router_pids();
+        for pid in &pids {
+            kill_pid(*pid);
+        }
+        if !pids.is_empty() {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        // Clear managed state since we killed it
+        let mut guard = N9_MANAGED.lock().unwrap();
+        *guard = None;
+        drop(guard);
+    } else if let Some(pid) = find_n9router_pid() {
         return Ok(serde_json::json!({ "ok": true, "method": "already_running", "pid": pid }));
     }
     if !is_n9router_installed() {
