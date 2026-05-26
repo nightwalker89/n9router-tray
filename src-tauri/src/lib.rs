@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write as IoWrite};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
@@ -16,6 +16,54 @@ use tauri_plugin_positioner::{Position, WindowExt};
 const N9ROUTER_BIN: &str = "n9router";
 const N9ROUTER_PORT: u16 = 20128;
 const LOG_RING_CAPACITY: usize = 2000;
+
+// ── Debug logging ───────────────────────────────────────────────────────────
+
+fn debug_log_path() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    format!("{}/.n9tray/debug.log", home)
+}
+
+fn write_debug_log(msg: &str) {
+    let path = debug_log_path();
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let ts = chrono_timestamp();
+        let _ = writeln!(f, "[{}] {}", ts, msg);
+    }
+}
+
+fn chrono_timestamp() -> String {
+    let output = Command::new("date").arg("+%Y-%m-%d %H:%M:%S").output();
+    match output {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        Err(_) => "?".to_string(),
+    }
+}
+
+/// Check if verbose logging is enabled by reading the tray store file directly
+fn is_verbose_logging_enabled() -> bool {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let store_path = format!("{}/.n9tray/tray-settings.json", home);
+    // Also check the Tauri plugin-store location
+    let tauri_store = format!("{}/Library/Application Support/com.n9router.tray/tray-settings.json", home);
+    for path in &[&tauri_store, &store_path] {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if content.contains("\"verboseLogging\":true") || content.contains("\"verboseLogging\": true") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn debug(msg: &str) {
+    if is_verbose_logging_enabled() {
+        write_debug_log(msg);
+    }
+}
 
 // ── AGY App Targets ─────────────────────────────────────────────────────────
 
@@ -433,6 +481,8 @@ fn n9router_start(force: Option<bool>) -> Result<serde_json::Value, String> {
     let n9_bin = find_n9router_bin()
         .ok_or_else(|| "n9router CLI not found. Install with: npm i -g n9router".to_string())?;
 
+    debug(&format!("n9router_start: binary={}, force={}", n9_bin, force));
+
     // Pipe stdout+stderr into our ring buffer
     let ring: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::with_capacity(LOG_RING_CAPACITY)));
     let ring_clone = ring.clone();
@@ -447,9 +497,14 @@ fn n9router_start(force: Option<bool>) -> Result<serde_json::Value, String> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to start n9router: {e}"))?;
+        .map_err(|e| {
+            let msg = format!("Failed to start n9router: {e}");
+            debug(&msg);
+            msg
+        })?;
 
     let pid = child.id();
+    debug(&format!("n9router_start: spawned pid={}", pid));
 
     // Drain stdout in a background thread
     if let Some(stdout) = child.stdout.take() {

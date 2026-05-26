@@ -118,6 +118,7 @@ export default function SettingsPanel() {
   const [autoStart, setAutoStart]   = useState(false);
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [killPort, setKillPort]     = useState(false);
+  const [verboseLog, setVerboseLog] = useState(false);
   const [storeReady, setStoreReady] = useState(false);
   const [store, setStore]           = useState(null);
 
@@ -144,6 +145,8 @@ export default function SettingsPanel() {
         setAutoStart(!!val);
         const kp = await s.get("killPortBeforeStart");
         setKillPort(!!kp);
+        const vl = await s.get("verboseLogging");
+        setVerboseLog(!!vl);
         setStore(s);
         setStoreReady(true);
       })
@@ -187,6 +190,14 @@ export default function SettingsPanel() {
     setKillPort(val);
     if (store) {
       await store.set("killPortBeforeStart", val);
+      await store.save();
+    }
+  };
+
+  const setVerboseLogVal = async val => {
+    setVerboseLog(val);
+    if (store) {
+      await store.set("verboseLogging", val);
       await store.save();
     }
   };
@@ -289,6 +300,13 @@ export default function SettingsPanel() {
           topBorder
         >
           <SettingToggle checked={killPort} onChange={setKillPortVal} disabled={!storeReady} />
+        </SettingRow>
+        <SettingRow
+          label="Verbose Logging"
+          description="Write debug logs to ~/.n9tray/debug.log"
+          topBorder
+        >
+          <SettingToggle checked={verboseLog} onChange={setVerboseLogVal} disabled={!storeReady} />
         </SettingRow>
       </div>
 
