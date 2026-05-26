@@ -1,0 +1,11 @@
+{
+  "name": "n9tray",
+  "version": "0.0.0",
+  "description": "n9router tray app installer and launcher for macOS",
+  "bin": { "n9tray": "./bin/n9tray.js" },
+  "os": ["darwin"],
+  "engines": { "node": ">=18" },
+  "repository": { "type": "git", "url": "https://github.com/nightwalker8x/n9router-tray" },
+  "license": "MIT",
+  "author": "cuongquach"
+}

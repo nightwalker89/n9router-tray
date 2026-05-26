@@ -13,7 +13,11 @@
     "tauri:build": "tauri build",
     "tauri:build:macos-arm": "tauri build --target aarch64-apple-darwin",
     "tauri:build:macos-x64": "tauri build --target x86_64-apple-darwin",
-    "tauri:build:macos-universal": "tauri build --target universal-apple-darwin"
+    "tauri:build:macos-universal": "tauri build --target universal-apple-darwin",
+    "build:dmg": "bash scripts/build-dmg.sh",
+    "publish:npm": "./scripts/publish-npm.sh",
+    "publish:npm:local": "./scripts/publish-npm.sh --local",
+    "publish:npm:dry": "./scripts/publish-npm.sh --dry-run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
