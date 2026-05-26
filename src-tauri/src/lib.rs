@@ -201,12 +201,37 @@ fn find_n9router_pid() -> Option<u32> {
     pids.into_iter().next()
 }
 
+fn find_n9router_bin() -> Option<String> {
+    // Try PATH first
+    if let Ok(o) = Command::new("which").arg(N9ROUTER_BIN).output() {
+        if o.status.success() {
+            let p = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if !p.is_empty() { return Some(p); }
+        }
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    // Check nvm versions
+    let nvm_base = format!("{}/.nvm/versions/node", home);
+    if let Ok(entries) = std::fs::read_dir(&nvm_base) {
+        for entry in entries.flatten() {
+            let bin = entry.path().join("bin/n9router");
+            if bin.exists() { return Some(bin.to_string_lossy().to_string()); }
+        }
+    }
+    // Static paths
+    let candidates = [
+        format!("{}/.local/bin/n9router", home),
+        "/opt/homebrew/bin/n9router".to_string(),
+        "/usr/local/bin/n9router".to_string(),
+    ];
+    for path in &candidates {
+        if std::path::Path::new(path).exists() { return Some(path.clone()); }
+    }
+    None
+}
+
 fn is_n9router_installed() -> bool {
-    Command::new("which")
-        .arg(N9ROUTER_BIN)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    find_n9router_bin().is_some()
 }
 
 /// Tail the last `count` lines from ~/.n9router/log.txt
@@ -405,15 +430,14 @@ fn n9router_start(force: Option<bool>) -> Result<serde_json::Value, String> {
     } else if let Some(pid) = find_n9router_pid() {
         return Ok(serde_json::json!({ "ok": true, "method": "already_running", "pid": pid }));
     }
-    if !is_n9router_installed() {
-        return Err("n9router CLI not found. Install with: npm i -g n9router".into());
-    }
+    let n9_bin = find_n9router_bin()
+        .ok_or_else(|| "n9router CLI not found. Install with: npm i -g n9router".to_string())?;
 
     // Pipe stdout+stderr into our ring buffer
     let ring: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::with_capacity(LOG_RING_CAPACITY)));
     let ring_clone = ring.clone();
 
-    let mut cmd = Command::new(N9ROUTER_BIN);
+    let mut cmd = Command::new(&n9_bin);
     // New session so n9router outlives tray; but we still pipe its output
     unsafe {
         cmd.pre_exec(|| { libc::setsid(); Ok(()) });
