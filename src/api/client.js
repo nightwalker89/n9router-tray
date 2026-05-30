@@ -93,6 +93,7 @@ export const api = {
     request("PATCH", "/api/cli-tools/antigravity-mitm", { tool, action, sudoPassword }),
 
   // AGY App Status (from n9router API)
+  getAgyTargets: () => request("GET", "/api/antigravity-targets").then(d => d.targets ?? []),
   getAgyStatus: (targetId) => request("GET", `/api/${targetId}`),
 
   // AGY App Control (close via n9router API which handles process management better)

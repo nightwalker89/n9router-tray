@@ -306,6 +306,19 @@ pub fn spawn_detached(target: &AppTarget) -> std::io::Result<u32> {
     Ok(pid)
 }
 
+/// Launch a resolved GUI app binary from n9router metadata.
+pub fn spawn_detached_binary(binary: &str) -> std::io::Result<u32> {
+    let child = command_for(binary)
+        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let pid = child.id();
+    drop(child);
+    Ok(pid)
+}
+
 /// Spawn n9router with stdout/stderr piped for the log ring, no console window.
 pub fn spawn_n9router_piped(bin: &str) -> std::io::Result<Child> {
     command_for(bin)

@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, Write as IoWrite};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
+use serde::Deserialize;
 use tauri::{
     image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
@@ -69,6 +70,72 @@ struct AppTarget {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     binary: &'static str,
     bundle_term: &'static str,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgyRuntimeTarget {
+    id: String,
+    label: Option<String>,
+    name: Option<String>,
+    installed: Option<bool>,
+    binary: Option<String>,
+    process_terms: Option<Vec<String>>,
+}
+
+fn runtime_target_label(target: &AgyRuntimeTarget) -> &str {
+    target
+        .label
+        .as_deref()
+        .or(target.name.as_deref())
+        .unwrap_or(target.id.as_str())
+}
+
+fn runtime_target_binary(target: &AgyRuntimeTarget) -> Result<&str, String> {
+    if target.installed == Some(false) {
+        return Err(format!("{} is not installed", runtime_target_label(target)));
+    }
+    let binary = target
+        .binary
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("{} has no resolved binary path", runtime_target_label(target)))?;
+    if !std::path::Path::new(binary).exists() {
+        return Err(format!("{} binary not found at {}", runtime_target_label(target), binary));
+    }
+    Ok(binary)
+}
+
+fn runtime_process_terms(target: &AgyRuntimeTarget) -> Vec<String> {
+    let mut terms: Vec<String> = target
+        .process_terms
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|term| term.trim().to_string())
+        .filter(|term| !term.is_empty())
+        .collect();
+    if terms.is_empty() {
+        if let Some(binary) = target.binary.as_deref() {
+            if let Some(name) = std::path::Path::new(binary).file_name().and_then(|n| n.to_str()) {
+                terms.push(name.to_string());
+            }
+        }
+    }
+    terms.sort();
+    terms.dedup();
+    terms
+}
+
+fn find_all_pids_for_terms(terms: &[String]) -> Vec<u32> {
+    let mut pids: Vec<u32> = terms
+        .iter()
+        .flat_map(|term| find_all_pids_for(term))
+        .collect();
+    pids.sort_unstable();
+    pids.dedup();
+    pids
 }
 
 #[cfg(target_os = "macos")]
@@ -394,6 +461,24 @@ fn spawn_detached(target: &AppTarget) -> std::io::Result<u32> {
     Ok(pid)
 }
 
+/// Launch a resolved GUI app binary from n9router metadata.
+#[cfg(target_os = "macos")]
+fn spawn_detached_binary(binary: &str) -> std::io::Result<u32> {
+    use std::os::unix::process::CommandExt;
+    let mut cmd = Command::new(binary);
+    unsafe {
+        cmd.pre_exec(|| { libc::setsid(); Ok(()) });
+    }
+    let child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let pid = child.id();
+    drop(child);
+    Ok(pid)
+}
+
 /// Spawn n9router in a new session with stdout/stderr piped for the log ring.
 #[cfg(target_os = "macos")]
 fn spawn_n9router_piped(bin: &str) -> std::io::Result<std::process::Child> {
@@ -504,6 +589,14 @@ fn antigravity_launch(target_id: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+fn antigravity_launch_resolved(target: AgyRuntimeTarget) -> Result<serde_json::Value, String> {
+    let binary = runtime_target_binary(&target)?;
+    let pid = spawn_detached_binary(binary)
+        .map_err(|e| format!("Failed to launch {}: {e}", runtime_target_label(&target)))?;
+    Ok(serde_json::json!({ "ok": true, "pid": pid, "target": target.id }))
+}
+
+#[tauri::command]
 fn antigravity_quit(target_id: String) -> Result<serde_json::Value, String> {
     let target = find_target(&target_id)
         .ok_or_else(|| format!("Unknown target: {}", target_id))?;
@@ -535,6 +628,21 @@ fn antigravity_restart(target_id: String) -> Result<serde_json::Value, String> {
         std::thread::sleep(std::time::Duration::from_millis(2000));
     }
     antigravity_launch(target_id)
+}
+
+#[tauri::command]
+fn antigravity_restart_resolved(target: AgyRuntimeTarget) -> Result<serde_json::Value, String> {
+    let terms = runtime_process_terms(&target);
+    let all_pids = find_all_pids_for_terms(&terms);
+    if !all_pids.is_empty() {
+        if let Some(main_pid) = find_main_pid(&all_pids) {
+            kill_pid(main_pid);
+        } else {
+            for pid in &all_pids { kill_pid(*pid); }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+    }
+    antigravity_launch_resolved(target)
 }
 
 // ── Tauri Commands — n9router process ────────────────────────────────────────
@@ -757,8 +865,10 @@ pub fn run() {
             antigravity_list_targets,
             antigravity_status,
             antigravity_launch,
+            antigravity_launch_resolved,
             antigravity_quit,
             antigravity_restart,
+            antigravity_restart_resolved,
             n9router_status,
             n9router_start,
             n9router_stop,

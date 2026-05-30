@@ -12,6 +12,20 @@ const TOOLS = [
   { id: "copilot",     label: "Copilot" },
 ];
 
+const AGY_LABEL_OVERRIDES = {
+  "antigravity-app": "Antigravity 1.x",
+  "antigravity-app-v2": "Antigravity 2",
+  "antigravity-ide": "Antigravity IDE",
+};
+
+function normalizeAgyTarget(target) {
+  return {
+    ...target,
+    label: AGY_LABEL_OVERRIDES[target.id] || target.label || target.name || target.id,
+    pid: target.pids?.[0] || target.pid || null,
+  };
+}
+
 // ── Mode A/B Selector ───────────────────────────────────────────────────────
 
 function ModeSelector({ mode, loading, onChange }) {
@@ -127,24 +141,10 @@ export default function MitmPanel() {
   // Poll AGY targets status every 5s via n9router API
   useEffect(() => {
     let active = true;
-    const AGY_ROUTES = [
-      { id: "antigravity-app", label: "AGYv1" },
-      { id: "antigravity-app-v2", label: "AGYv2" },
-      { id: "antigravity-ide", label: "AGY IDE" },
-    ];
     const poll = async () => {
       if (!active) return;
       try {
-        const results = await Promise.all(
-          AGY_ROUTES.map(async (r) => {
-            try {
-              const data = await api.getAgyStatus(r.id);
-              return { id: r.id, label: r.label, installed: data.installed, running: data.running, pid: data.pids?.[0] || null };
-            } catch {
-              return { id: r.id, label: r.label, installed: false, running: false, pid: null };
-            }
-          })
-        );
+        const results = (await api.getAgyTargets()).map(normalizeAgyTarget);
         if (active) setAgTargets(results);
       } catch { /* ignore */ }
     };
@@ -214,36 +214,23 @@ export default function MitmPanel() {
   }, [status, handleAction]);
 
   // ── Antigravity App Actions ──────────────────────────────────────────────
-  // Note: launch/restart still use local Rust invokes; close (quit) uses n9router API
-  // which handles the feature better (proper process tree, cross-platform, etc.)
-  const handleAgAction = useCallback(async (action, targetId) => {
+  // Launch/restart stay in Rust, but consume path metadata resolved by n9router.
+  const handleAgAction = useCallback(async (action, target) => {
+    const targetId = target.id;
     setAgError(null);
     const loadingKey = `${action}:${targetId}`;
     setAgLoading(loadingKey);
     try {
       if (action === "launch") {
-        await invoke("antigravity_launch", { "targetId": targetId });
+        await invoke("antigravity_launch_resolved", { target });
       } else if (action === "quit") {
         await api.closeAgy(targetId);
       } else if (action === "restart") {
-        await invoke("antigravity_restart", { "targetId": targetId });
+        await invoke("antigravity_restart_resolved", { target });
       }
       setTimeout(async () => {
         try {
-          const results = await Promise.all(
-            [
-              { id: "antigravity-app", label: "AGYv1" },
-              { id: "antigravity-app-v2", label: "AGYv2" },
-              { id: "antigravity-ide", label: "AGY IDE" },
-            ].map(async (r) => {
-              try {
-                const data = await api.getAgyStatus(r.id);
-                return { id: r.id, label: r.label, installed: data.installed, running: data.running, pid: data.pids?.[0] || null };
-              } catch {
-                return { id: r.id, label: r.label, installed: false, running: false, pid: null };
-              }
-            })
-          );
+          const results = (await api.getAgyTargets()).map(normalizeAgyTarget);
           setAgTargets(results);
         } catch { /* ignore */ }
         setAgLoading(null);
@@ -352,7 +339,7 @@ export default function MitmPanel() {
                 {!target.running ? (
                   <button
                     className="ag-btn ag-btn-green"
-                    onClick={() => handleAgAction("launch", target.id)}
+                    onClick={() => handleAgAction("launch", target)}
                     disabled={!!agLoading}
                   >
                     {agLoading === `launch:${target.id}` ? <span className="spinner" /> : "▶ Launch"}
@@ -361,14 +348,14 @@ export default function MitmPanel() {
                   <>
                     <button
                       className="ag-btn ag-btn-yellow"
-                      onClick={() => handleAgAction("restart", target.id)}
+                      onClick={() => handleAgAction("restart", target)}
                       disabled={!!agLoading}
                     >
                       {agLoading === `restart:${target.id}` ? <span className="spinner" /> : "↺ Restart"}
                     </button>
                     <button
                       className="ag-btn ag-btn-red"
-                      onClick={() => handleAgAction("quit", target.id)}
+                      onClick={() => handleAgAction("quit", target)}
                       disabled={!!agLoading}
                     >
                       {agLoading === `quit:${target.id}` ? <span className="spinner" /> : "■ Quit"}
