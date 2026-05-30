@@ -26,9 +26,26 @@ tauri-plugin-http = { version = "2", features = ["default", "unsafe-headers"] }
 tauri-plugin-store = "2"
 tauri-plugin-autostart = "2"
 open = "5"
-libc = "0.2"
 once_cell = "1"
+
+# Unix-only (macOS): process control via libc setsid + PATH fix for GUI apps.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", version = "0.0.0" }
+
+# Windows-only: process detection, path/home lookup, timestamps, Win32 focus.
+[target.'cfg(windows)'.dependencies]
+sysinfo = "0.32"
+which = "6"
+dirs = "5"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+] }
+# Re-launch focuses the existing tray instance instead of spawning a duplicate.
+tauri-plugin-single-instance = "2"
 
 [profile.release]
 strip = true

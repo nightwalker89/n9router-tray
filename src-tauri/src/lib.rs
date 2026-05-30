@@ -11,6 +11,15 @@ use tauri::{
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 
+// ── Windows platform module ──────────────────────────────────────────────────
+// All Windows-specific seam fns live in this separate file. macOS impls stay
+// in this file (below), gated with #[cfg(target_os = "macos")]. Only one set
+// compiles per target; command functions call the seam fns by name.
+#[cfg(target_os = "windows")]
+mod platform_windows;
+#[cfg(target_os = "windows")]
+use platform_windows::*;
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const N9ROUTER_BIN: &str = "n9router";
@@ -20,8 +29,7 @@ const LOG_RING_CAPACITY: usize = 2000;
 // ── Debug logging ───────────────────────────────────────────────────────────
 
 fn debug_log_path() -> String {
-    let home = std::env::var("HOME").unwrap_or_default();
-    format!("{}/.n9tray/debug.log", home)
+    format!("{}/.n9tray/debug.log", home_dir().to_string_lossy())
 }
 
 fn write_debug_log(msg: &str) {
@@ -35,6 +43,7 @@ fn write_debug_log(msg: &str) {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn chrono_timestamp() -> String {
     let output = Command::new("date").arg("+%Y-%m-%d %H:%M:%S").output();
     match output {
@@ -53,11 +62,16 @@ fn debug(msg: &str) {
 struct AppTarget {
     id: &'static str,
     label: &'static str,
+    // Used by the macOS seam (is_target_installed / spawn_detached); on Windows
+    // the exe path is resolved dynamically, so these go unread there.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     app_path: &'static str,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     binary: &'static str,
     bundle_term: &'static str,
 }
 
+#[cfg(target_os = "macos")]
 const AGY_TARGETS: &[AppTarget] = &[
     AppTarget {
         id: "antigravity-app",
@@ -82,6 +96,7 @@ const AGY_TARGETS: &[AppTarget] = &[
     },
 ];
 
+#[cfg(target_os = "macos")]
 fn is_target_installed(target: &AppTarget) -> bool {
     use std::path::Path;
     match target.id {
@@ -99,11 +114,13 @@ fn is_target_installed(target: &AppTarget) -> bool {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn find_target(id: &str) -> Option<&'static AppTarget> {
     AGY_TARGETS.iter().find(|t| t.id == id)
 }
 
 /// Known terminal apps (the comm basename we look for in the ppid chain)
+#[cfg(target_os = "macos")]
 const KNOWN_TERMINALS: &[&str] = &[
     "Terminal", "iTerm2", "iTerm", "kitty", "Alacritty", "WezTerm",
     "Warp", "Tabby", "Hyper", "wezterm-gui",
@@ -122,6 +139,7 @@ static N9_MANAGED: Lazy<Mutex<Option<ManagedProcess>>> =
 
 // ── Process Detection ────────────────────────────────────────────────────────
 
+#[cfg(target_os = "macos")]
 fn parse_pids(output: &str) -> Vec<u32> {
     output
         .trim()
@@ -131,6 +149,7 @@ fn parse_pids(output: &str) -> Vec<u32> {
         .collect()
 }
 
+#[cfg(target_os = "macos")]
 fn is_main_process(ppid: u32, comm: &str) -> bool {
     ppid == 1
         && comm.contains("/Contents/MacOS/")
@@ -138,6 +157,7 @@ fn is_main_process(ppid: u32, comm: &str) -> bool {
         && !comm.contains("chrome_crashpad_handler")
 }
 
+#[cfg(target_os = "macos")]
 fn find_all_pids_for(bundle_term: &str) -> Vec<u32> {
     let output = match Command::new("pgrep")
         .args(["-f", bundle_term])
@@ -152,6 +172,7 @@ fn find_all_pids_for(bundle_term: &str) -> Vec<u32> {
     parse_pids(&String::from_utf8_lossy(&output.stdout))
 }
 
+#[cfg(target_os = "macos")]
 fn find_main_pid(pids: &[u32]) -> Option<u32> {
     if pids.is_empty() {
         return None;
@@ -191,6 +212,7 @@ fn find_main_pid(pids: &[u32]) -> Option<u32> {
     None
 }
 
+#[cfg(target_os = "macos")]
 fn kill_pid(pid: u32) -> bool {
     Command::new("kill")
         .arg(pid.to_string())
@@ -203,6 +225,7 @@ fn kill_pid(pid: u32) -> bool {
 
 /// Return ALL PIDs listening on n9router port, preferring ones with a terminal ancestor.
 /// Multiple PIDs can appear when e.g. Chrome and a terminal both hold a process on the port.
+#[cfg(target_os = "macos")]
 fn find_n9router_pids() -> Vec<u32> {
     let output = match Command::new("lsof")
         .args(["-ti", &format!(":{}", N9ROUTER_PORT)])
@@ -219,6 +242,7 @@ fn find_n9router_pids() -> Vec<u32> {
 }
 
 /// Return a single PID for status/stop: prefer the terminal-started one.
+#[cfg(target_os = "macos")]
 fn find_n9router_pid() -> Option<u32> {
     let pids = find_n9router_pids();
     if pids.is_empty() { return None; }
@@ -234,12 +258,14 @@ fn find_n9router_pid() -> Option<u32> {
 
 // ── Cached n9router binary path ─────────────────────────────────────────────
 
+#[cfg(target_os = "macos")]
 static N9_BIN_CACHE: Lazy<Mutex<Option<String>>> = Lazy::new(|| {
     let bin = find_n9router_bin_inner();
     debug(&format!("n9router binary resolved: {:?}", bin));
     Mutex::new(bin)
 });
 
+#[cfg(target_os = "macos")]
 fn find_n9router_bin_inner() -> Option<String> {
     let path_env = std::env::var("PATH").unwrap_or_default();
     debug(&format!("find_n9router_bin: PATH={}", path_env));
@@ -257,6 +283,7 @@ fn find_n9router_bin_inner() -> Option<String> {
     None
 }
 
+#[cfg(target_os = "macos")]
 fn find_n9router_bin() -> Option<String> {
     N9_BIN_CACHE.lock().unwrap().clone()
 }
@@ -279,8 +306,7 @@ fn get_n9router_version(bin_path: &str) -> Option<String> {
 
 /// Tail the last `count` lines from ~/.n9router/log.txt
 fn tail_log_file(count: usize) -> Vec<String> {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let path = format!("{}/.n9router/log.txt", home);
+    let path = format!("{}/.n9router/log.txt", home_dir().to_string_lossy());
     let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
         Err(_) => return vec![format!("[n9router] Log file not found: {}", path)],
@@ -292,6 +318,7 @@ fn tail_log_file(count: usize) -> Vec<String> {
 /// Walk ppid chain from `pid`, return the first terminal app name found.
 /// Uses separate `ps -o ppid=` and `ps -o command=` calls to get the FULL
 /// (non-truncated) command path — macOS `comm=` truncates at 16 chars.
+#[cfg(target_os = "macos")]
 fn find_terminal_ancestor(start_pid: u32) -> Option<String> {
     let mut pid = start_pid;
     for _ in 0..12 {
@@ -334,11 +361,99 @@ fn find_terminal_ancestor(start_pid: u32) -> Option<String> {
     None
 }
 
+// ── macOS platform seam ─────────────────────────────────────────────────────
+// These fns hold the macOS-specific code that the command functions call.
+// Windows twins with identical names/signatures live in platform_windows.rs.
+// Bodies below are the exact code previously inlined in the commands.
+
+#[cfg(target_os = "macos")]
+fn home_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+}
+
+#[cfg(target_os = "macos")]
+fn app_targets() -> &'static [AppTarget] {
+    AGY_TARGETS
+}
+
+/// Launch a GUI app detached (new session) and return its pid.
+#[cfg(target_os = "macos")]
+fn spawn_detached(target: &AppTarget) -> std::io::Result<u32> {
+    use std::os::unix::process::CommandExt;
+    let mut cmd = Command::new(target.binary);
+    unsafe {
+        cmd.pre_exec(|| { libc::setsid(); Ok(()) });
+    }
+    let child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let pid = child.id();
+    drop(child);
+    Ok(pid)
+}
+
+/// Spawn n9router in a new session with stdout/stderr piped for the log ring.
+#[cfg(target_os = "macos")]
+fn spawn_n9router_piped(bin: &str) -> std::io::Result<std::process::Child> {
+    use std::os::unix::process::CommandExt;
+    let mut cmd = Command::new(bin);
+    // New session so n9router outlives tray; but we still pipe its output
+    unsafe {
+        cmd.pre_exec(|| { libc::setsid(); Ok(()) });
+    }
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+}
+
+/// Bring the terminal that started n9router to the foreground.
+#[cfg(target_os = "macos")]
+fn focus_terminal_impl(all_pids: &[u32]) -> serde_json::Value {
+    // Try each pid to find one with a terminal ancestor
+    for &pid in all_pids {
+        if let Some(app_name) = find_terminal_ancestor(pid) {
+            let script = format!("tell application \"{}\" to activate", app_name);
+            let result = Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .output();
+            match result {
+                Ok(o) if o.status.success() => {
+                    return serde_json::json!({ "ok": true, "app": app_name, "pid": pid });
+                }
+                Ok(o) => {
+                    let err = String::from_utf8_lossy(&o.stderr).to_string();
+                    return serde_json::json!({
+                        "ok": false,
+                        "fallback": "log_file",
+                        "reason": format!("AppleScript failed: {}", err)
+                    });
+                }
+                Err(e) => {
+                    return serde_json::json!({
+                        "ok": false,
+                        "fallback": "log_file",
+                        "reason": format!("osascript error: {}", e)
+                    });
+                }
+            }
+        }
+    }
+    serde_json::json!({
+        "ok": false,
+        "fallback": "log_file",
+        "reason": format!("No terminal ancestor found in {} PIDs (started via launchd or non-terminal)", all_pids.len()),
+    })
+}
+
 // ── Tauri Commands — Antigravity ─────────────────────────────────────────────
 
 #[tauri::command]
 fn antigravity_list_targets() -> serde_json::Value {
-    let targets: Vec<serde_json::Value> = AGY_TARGETS.iter().map(|t| {
+    let targets: Vec<serde_json::Value> = app_targets().iter().map(|t| {
         let installed = is_target_installed(t);
         let all_pids = if installed { find_all_pids_for(t.bundle_term) } else { vec![] };
         let running = !all_pids.is_empty();
@@ -383,19 +498,8 @@ fn antigravity_launch(target_id: String) -> Result<serde_json::Value, String> {
     if !is_target_installed(target) {
         return Err(format!("{} is not installed", target.label));
     }
-    use std::os::unix::process::CommandExt;
-    let mut cmd = Command::new(target.binary);
-    unsafe {
-        cmd.pre_exec(|| { libc::setsid(); Ok(()) });
-    }
-    let child = cmd
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
+    let pid = spawn_detached(target)
         .map_err(|e| format!("Failed to launch {}: {e}", target.label))?;
-    let pid = child.id();
-    drop(child);
     Ok(serde_json::json!({ "ok": true, "pid": pid, "target": target.id }))
 }
 
@@ -458,8 +562,6 @@ fn n9router_status() -> serde_json::Value {
 
 #[tauri::command]
 fn n9router_start(force: Option<bool>) -> Result<serde_json::Value, String> {
-    use std::os::unix::process::CommandExt;
-
     let force = force.unwrap_or(false);
 
     if force {
@@ -486,16 +588,7 @@ fn n9router_start(force: Option<bool>) -> Result<serde_json::Value, String> {
     let ring: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::with_capacity(LOG_RING_CAPACITY)));
     let ring_clone = ring.clone();
 
-    let mut cmd = Command::new(&n9_bin);
-    // New session so n9router outlives tray; but we still pipe its output
-    unsafe {
-        cmd.pre_exec(|| { libc::setsid(); Ok(()) });
-    }
-    let mut child = cmd
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+    let mut child = spawn_n9router_piped(&n9_bin)
         .map_err(|e| {
             let msg = format!("Failed to start n9router: {e}");
             debug(&msg);
@@ -603,43 +696,7 @@ fn n9router_focus_terminal() -> serde_json::Value {
     if all_pids.is_empty() {
         return serde_json::json!({ "ok": false, "reason": "n9router not running" });
     }
-
-    // Try each pid to find one with a terminal ancestor
-    for &pid in &all_pids {
-        if let Some(app_name) = find_terminal_ancestor(pid) {
-            let script = format!("tell application \"{}\" to activate", app_name);
-            let result = Command::new("osascript")
-                .arg("-e")
-                .arg(&script)
-                .output();
-            match result {
-                Ok(o) if o.status.success() => {
-                    return serde_json::json!({ "ok": true, "app": app_name, "pid": pid });
-                }
-                Ok(o) => {
-                    let err = String::from_utf8_lossy(&o.stderr).to_string();
-                    return serde_json::json!({
-                        "ok": false,
-                        "fallback": "log_file",
-                        "reason": format!("AppleScript failed: {}", err)
-                    });
-                }
-                Err(e) => {
-                    return serde_json::json!({
-                        "ok": false,
-                        "fallback": "log_file",
-                        "reason": format!("osascript error: {}", e)
-                    });
-                }
-            }
-        }
-    }
-
-    serde_json::json!({
-        "ok": false,
-        "fallback": "log_file",
-        "reason": format!("No terminal ancestor found in {} PIDs (started via launchd or non-terminal)", all_pids.len()),
-    })
+    focus_terminal_impl(&all_pids)
 }
 
 /// Open (or focus) the floating terminal log window
@@ -674,9 +731,23 @@ fn open_terminal_window(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Fix PATH for macOS GUI apps that don't inherit shell environment
+    #[cfg(unix)]
     let _ = fix_path_env::fix();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Windows: relaunching focuses the existing tray instance instead of opening
+    // a second copy. Must be registered before any other plugin. Compiled out on
+    // macOS, so the builder chain below is behaviorally unchanged there.
+    #[cfg(target_os = "windows")]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }));
+
+    builder
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
@@ -710,9 +781,15 @@ pub fn run() {
                 .item(&quit_item)
                 .build()?;
 
-            let tray_icon = TrayIconBuilder::new()
+            // Template (monochrome) rendering is macOS-only; Windows uses the colored icon.
+            #[cfg(target_os = "macos")]
+            let tray_builder = TrayIconBuilder::new()
                 .icon(Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?)
-                .icon_as_template(true)
+                .icon_as_template(true);
+            #[cfg(not(target_os = "macos"))]
+            let tray_builder = TrayIconBuilder::new()
+                .icon(Image::from_bytes(include_bytes!("../icons/icon.png"))?);
+            let tray_icon = tray_builder
                 .tooltip("n9router tray")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -734,7 +811,15 @@ pub fn run() {
                             if window.is_visible().unwrap_or(false) {
                                 let _ = window.hide();
                             } else {
+                                // macOS menu bar is at the top → drop the panel
+                                // down from the tray (existing behavior).
+                                #[cfg(target_os = "macos")]
                                 let _ = window.move_window(Position::TrayBottomCenter);
+                                // Windows taskbar is at the bottom → place the panel
+                                // ABOVE the tray and constrain it to the monitor so it
+                                // never spills off-screen (e.g. past the right edge).
+                                #[cfg(not(target_os = "macos"))]
+                                let _ = window.move_window_constrained(Position::TrayCenter);
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }

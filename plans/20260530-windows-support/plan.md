@@ -13,13 +13,13 @@ User-confirmed decisions: (1) adapt AGY launch patterns from `vscode-mirror-chat
 
 | # | Phase | Status | Complexity |
 |---|-------|--------|------------|
-| 1 | Platform seam (macOS untouched, Windows in new file) | pending | high |
-| 2 | Windows process/launch/kill/port impl | pending | high |
-| 3 | Win32 terminal focus | pending | medium |
-| 4 | Cargo deps + Tauri config + tray/main | pending | medium |
-| 5 | Cross-platform npm CLI + installer | pending | medium |
-| 6 | Windows CI job + scripts + README | pending | low |
-| 7 | Frontend cosmetic + verification | pending | low |
+| 1 | Platform seam (macOS untouched, Windows in new file) | ✅ done 2026-05-30 | high |
+| 2 | Windows process/launch/kill/port impl | ✅ done 2026-05-30 | high |
+| 3 | Win32 terminal focus | ✅ done 2026-05-30 | medium |
+| 4 | Cargo deps + Tauri config + tray/main | ✅ done 2026-05-30 | medium |
+| 5 | Cross-platform npm CLI + installer | ✅ done 2026-05-30 | medium |
+| 6 | Windows CI job + scripts + README | ✅ done 2026-05-30 | low |
+| 7 | Frontend cosmetic + verification | ✅ done 2026-05-30 | low |
 
 ## Key Files
 
@@ -56,4 +56,8 @@ User-confirmed decisions: (1) adapt AGY launch patterns from `vscode-mirror-chat
 3. Adopt `tauri-plugin-single-instance`?
 4. Code signing cert available? (else SmartScreen warnings).
 
-## DO NOT IMPLEMENT — plan only, awaiting review.
+## Status: IMPLEMENTED + VERIFIED (2026-05-30)
+
+All 7 phases implemented. Verified: macOS `cargo check`/`clippy` clean (no regression), Windows cross-compile clean via `cargo xwin check`, both targets warning-free, frontend build + CLI smoke test pass.
+
+Open-question resolutions (coded defaults adopted): Q1 best-effort Windows AGY paths, Q2 NSIS+MSI / perUser, Q3 single-instance added (Windows-only, cfg-gated). Q4 (signing) and Q5 (n9router backend on Windows) remain user decisions before public release — see `plan-questions.md`.

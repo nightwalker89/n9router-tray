@@ -283,7 +283,7 @@ export default function SettingsPanel() {
       <div className="settings-section-body">
         <SettingRow
           label="Launch at Login"
-          description="Start this tray app when you log in to macOS"
+          description="Start this tray app automatically when you sign in"
         >
           <SettingToggle checked={launchAtLogin} onChange={toggleLaunchAtLogin} disabled={!storeReady} />
         </SettingRow>

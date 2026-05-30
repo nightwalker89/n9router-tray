@@ -106,14 +106,14 @@ Keep `app.macOSPrivateApi:true` (ignored on Windows). Evaluate transparent popup
 8. macOS `cargo build` regression check (diff = no behavioral change); Windows build via Phase 6 CI.
 
 ## Todo
-- [ ] Cargo deps updated + target-scoped (chrono windows-only)
-- [ ] macOS `chrono_timestamp()` gated + Windows twin in platform_windows.rs
-- [ ] fix-path-env unix-gated
-- [ ] tray icon Windows cfg arm (macOS arm unchanged)
-- [ ] single-instance (if approved)
-- [ ] nsis/msi + bundle.windows
-- [ ] tauri:build:windows script
-- [ ] macOS build unaffected (behavioral diff = none)
+- [x] Cargo deps updated + target-scoped (chrono windows-only)
+- [x] macOS `chrono_timestamp()` gated + Windows twin in platform_windows.rs
+- [x] fix-path-env unix-gated
+- [x] tray icon Windows cfg arm (macOS arm unchanged)
+- [x] single-instance (Windows-only, cfg-gated)
+- [x] nsis/msi + bundle.windows
+- [x] tauri:build:windows script
+- [x] macOS build unaffected (behavioral diff = none; cargo check + clippy clean)
 
 ## Success Criteria
 - macOS DMG builds + runs as before.

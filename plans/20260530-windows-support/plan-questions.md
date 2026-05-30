@@ -16,9 +16,8 @@ Coded defaults (probe order):
 Default: emit BOTH NSIS `.exe` (currentUser/perUser, no admin) + MSI; CLI prefers `.exe`.
 Confirm: NSIS-only? perMachine instead of perUser? (affects install path the CLI probes.)
 
-## Q3 — Single-instance plugin (LOW)
-Default: add `tauri-plugin-single-instance` so re-launching focuses existing tray (helpful on Windows).
-Confirm: include it?
+## Q3 — Single-instance plugin (RESOLVED)
+IMPLEMENTED (2026-05-30): added `tauri-plugin-single-instance` **Windows-only** (cfg-gated dep + builder registration). Re-launching focuses the existing tray window. macOS build is unaffected (crate compiled out). Reversible by removing the dep + the `#[cfg(target_os="windows")]` builder block.
 
 ## Q4 — Code signing (MED)
 No cert assumed → unsigned `.exe`/MSI triggers SmartScreen "unknown publisher" (parallels current unsigned macOS). 
@@ -32,4 +31,4 @@ Confirm: is n9router Windows-capable, or should the tray hide/disable MITM+DNS c
 DECIDED (user 2026-05-30): Do NOT relocate macOS code. macOS seam fns STAY in `lib.rs` (bodies unchanged, gain `#[cfg(target_os="macos")]`). ALL Windows code goes in a NEW `platform_windows.rs`. Existing files modified as little as possible; Windows work must not impact macOS. Phase 1 rewritten accordingly.
 
 ---
-Awaiting answers. Plan is NOT being implemented until approved.
+Implemented with coded defaults. Genuinely open pre-release decisions: **Q4** (code signing — currently unsigned) and **Q5** (whether n9router's backend supports Windows; otherwise consider hiding MITM/DNS controls). Q1 paths should be confirmed against a real Windows Antigravity install.

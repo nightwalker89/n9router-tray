@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * n9tray CLI — installer and launcher for n9router tray app (macOS).
+ * n9tray CLI — installer and launcher for the n9router tray app (macOS + Windows).
  *
  * Usage:
  *   n9tray              # launch (install if needed)
@@ -10,27 +10,49 @@
  *   n9tray --version    # show version
  */
 
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
-const os = require("os");
-
-const APP_DIR = "/Applications";
-const APP_NAME = "n9router tray.app";
-const APP_PATH = path.join(APP_DIR, APP_NAME);
 
 const pkg = require("../package.json");
 const args = process.argv.slice(2);
+
+const isWin = process.platform === "win32";
+const isMac = process.platform === "darwin";
+
+if (!isWin && !isMac) {
+  console.error("n9tray supports macOS and Windows only.");
+  process.exit(1);
+}
 
 if (args.includes("--version") || args.includes("-v")) {
   console.log(pkg.version);
   process.exit(0);
 }
 
-const needsInstall = args.includes("--install") || args.includes("--update") || !fs.existsSync(APP_PATH);
+// Candidate install locations per OS (first existing wins).
+const APP_PATHS = isMac
+  ? ["/Applications/n9router tray.app"]
+  : [
+      path.join(
+        process.env.LOCALAPPDATA || "",
+        "Programs",
+        "n9router tray",
+        "n9router tray.exe"
+      ),
+      path.join(
+        process.env.ProgramFiles || "C:\\Program Files",
+        "n9router tray",
+        "n9router tray.exe"
+      ),
+    ];
+
+const installedPath = APP_PATHS.find((p) => p && fs.existsSync(p));
+const needsInstall =
+  args.includes("--install") || args.includes("--update") || !installedPath;
 
 if (needsInstall) {
-  require("../lib/installer").install().then(launch).catch(err => {
+  require("../lib/installer").install().then(launch).catch((err) => {
     console.error("Install failed:", err.message);
     process.exit(1);
   });
@@ -40,9 +62,14 @@ if (needsInstall) {
 
 function launch() {
   try {
-    execSync(`open -a "${APP_PATH}"`, { stdio: "inherit" });
+    if (isMac) {
+      execSync(`open -a "${APP_PATHS[0]}"`, { stdio: "inherit" });
+    } else {
+      const exe = APP_PATHS.find((p) => p && fs.existsSync(p)) || APP_PATHS[0];
+      spawn(exe, [], { detached: true, stdio: "ignore" }).unref();
+    }
   } catch {
-    console.error(`Failed to launch ${APP_NAME}. Try: n9tray --install`);
+    console.error("Failed to launch n9router tray. Try: n9tray --install");
     process.exit(1);
   }
 }

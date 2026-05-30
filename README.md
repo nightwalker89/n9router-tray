@@ -1,6 +1,6 @@
 # n9router tray
 
-A macOS menu bar app for managing [n9router](https://github.com/nightwalker89/n9router) — the MITM proxy that intercepts and routes AI coding tool requests across multiple provider accounts.
+A macOS and Windows menu bar / system tray app for managing [n9router](https://github.com/nightwalker89/n9router) — the MITM proxy that intercepts and routes AI coding tool requests across multiple provider accounts.
 
 ## Features
 
@@ -10,7 +10,7 @@ A macOS menu bar app for managing [n9router](https://github.com/nightwalker89/n9
 - **DNS Routing** — Per-tool DNS toggle for Antigravity, Cursor, Codex, Kiro, and Copilot
 - **Provider Accounts** — View connection health, quota status (Sonnet 4.6 + Flash 3.5), and account type
 - **Usage Stats** — Monitor request counts and token usage across providers
-- **Auto-start** — Launch at macOS login and auto-start n9router when the tray opens
+- **Auto-start** — Launch at login (macOS Login Item / Windows startup) and auto-start n9router when the tray opens
 - **Kill Port** — Optionally terminate zombie processes on port 20128 before starting n9router
 - **n9router Logs** — Floating terminal window with live log streaming
 
@@ -18,11 +18,19 @@ A macOS menu bar app for managing [n9router](https://github.com/nightwalker89/n9
 
 ### One-liner (recommended)
 
+**macOS:**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nightwalker89/n9router-tray/main/scripts/install.sh | bash
 ```
 
-### Via npm CLI
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/nightwalker89/n9router-tray/main/scripts/install.ps1 | iex
+```
+
+### Via npm CLI (cross-platform)
 
 ```bash
 npm i -g n9tray
@@ -32,11 +40,12 @@ n9tray
 
 ### Manual
 
-Download the latest `.dmg` from [Releases](https://github.com/nightwalker89/n9router-tray/releases), open it, and drag **n9router tray** to `/Applications`.
+- **macOS:** download the latest `.dmg` from [Releases](https://github.com/nightwalker89/n9router-tray/releases), open it, and drag **n9router tray** to `/Applications`.
+- **Windows:** download the latest `*-setup.exe` (or `.msi`) from [Releases](https://github.com/nightwalker89/n9router-tray/releases) and run the installer.
 
 ## Requirements
 
-- macOS 13.0+
+- macOS 13.0+ or Windows 10/11
 - [n9router](https://github.com/nightwalker89/n9router) installed (`npm i -g n9router`)
 
 ## Usage
@@ -54,7 +63,7 @@ After installation, the tray icon appears in your menu bar. Click it to access:
 
 | Setting | Description |
 |---------|-------------|
-| Launch at Login | Register as macOS Login Item so the tray starts on boot |
+| Launch at Login | Start the tray automatically on sign-in (macOS Login Item / Windows startup) |
 | Auto-start n9router | Automatically start n9router when the tray app opens |
 | Kill port before start | Terminate any process on port 20128 before spawning n9router |
 
@@ -80,7 +89,10 @@ npm run publish:npm:local
 npm run tauri:build:macos-arm        # Apple Silicon only
 npm run tauri:build:macos-x64        # Intel only
 npm run tauri:build:macos-universal  # Universal (arm64 + x86_64)
+npm run tauri:build:windows          # Windows x64 (NSIS .exe + MSI)
 ```
+
+> **Windows build prerequisites:** Rust `x86_64-pc-windows-msvc` toolchain, Visual Studio Build Tools ("Desktop development with C++"), and the WebView2 runtime (preinstalled on Windows 11). Builds run natively on a Windows host; the `build-windows` CI job uses `windows-latest`.
 
 ### Publish CLI to npm
 
@@ -93,7 +105,8 @@ npm run publish:npm:dry       # dry run
 ## Tech Stack
 
 - **Frontend**: React 18, Vite
-- **Backend**: Rust, Tauri 2.x
+- **Backend**: Rust, Tauri 2.x (macOS + Windows)
+- **Platform layer**: macOS uses `pgrep`/`lsof`/`osascript`; Windows uses `sysinfo`, `netstat`, `taskkill`, and Win32 (`SetForegroundWindow`) — isolated in `src-tauri/src/platform_windows.rs`
 - **Plugins**: tauri-plugin-store, tauri-plugin-autostart, tauri-plugin-positioner, tauri-plugin-http, tauri-plugin-shell
 
 ## Related
