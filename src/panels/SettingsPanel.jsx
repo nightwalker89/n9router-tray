@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
 import { api } from "../api/client";
+import { HUD_PRESETS, DEFAULT_HUD_PRESET, resolveHudPreset } from "../hud/presets";
 
 // ── Shared toggle component ───────────────────────────────────────────────────
 function SettingToggle({ checked, onChange, disabled }) {
@@ -122,6 +123,7 @@ export default function SettingsPanel() {
   const [showHud, setShowHud]       = useState(false);
   const [showHudOnStart, setShowHudOnStart] = useState(false);
   const [hudOpacity, setHudOpacity] = useState(95);
+  const [hudPreset, setHudPreset] = useState(DEFAULT_HUD_PRESET);
   const [storeReady, setStoreReady] = useState(false);
   const [store, setStore]           = useState(null);
 
@@ -154,6 +156,7 @@ export default function SettingsPanel() {
         setShowHudOnStart(!!(await s.get("showHudOnStart")));
         const ho = await s.get("hudOpacity");
         if (Number.isFinite(ho)) setHudOpacity(ho);
+        setHudPreset(resolveHudPreset(await s.get("hudPreset")));
         setStore(s);
         setStoreReady(true);
       })
@@ -230,6 +233,14 @@ export default function SettingsPanel() {
     setHudOpacity(val);
     if (store) {
       await store.set("hudOpacity", val);
+      await store.save();
+    }
+  };
+
+  const setHudPresetVal = async val => {
+    setHudPreset(val);
+    if (store) {
+      await store.set("hudPreset", val);
       await store.save();
     }
   };
@@ -373,6 +384,47 @@ export default function SettingsPanel() {
             <span className="hud-opacity-value">{hudOpacity}%</span>
           </div>
         </SettingRow>
+        <div style={{ borderTop: "1px solid var(--border-light)", padding: "8px 0 2px" }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-primary)" }}>HUD Theme</div>
+          <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1, lineHeight: 1.4 }}>
+            Color preset for the Activity HUD — applies live
+          </div>
+          <div className="hud-preset-grid">
+            {HUD_PRESETS.map(p => {
+              const selected = hudPreset === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`hud-preset-card ${selected ? "selected" : ""}`}
+                  title={p.hint}
+                  aria-pressed={selected}
+                  disabled={!storeReady}
+                  onClick={() => setHudPresetVal(p.id)}
+                  style={{ "--preset-accent": p.accent }}
+                >
+                  <span
+                    className="hud-preset-swatch"
+                    style={{
+                      background: `linear-gradient(135deg, ${p.swatch[1]} 0%, ${p.swatch[2]} 100%)`,
+                    }}
+                  >
+                    <span className="hud-preset-dot" style={{ background: p.swatch[0] }} />
+                  </span>
+                  <span className="hud-preset-name">{p.label}</span>
+                  {selected && (
+                    <span className="hud-preset-check">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ── Section B: Routing ── */}

@@ -1055,8 +1055,66 @@ html, body, #root {
   min-width: 34px; text-align: right; font-variant-numeric: tabular-nums;
 }
 
+/* ── HUD theme preset picker ── */
+.hud-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 7px;
+}
+.hud-preset-card {
+  position: relative;
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 7px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.hud-preset-card:hover:not(:disabled) {
+  border-color: var(--preset-accent);
+  background: var(--bg-hover);
+}
+.hud-preset-card:disabled { opacity: 0.5; cursor: not-allowed; }
+.hud-preset-card.selected {
+  border-color: var(--preset-accent);
+  box-shadow: inset 0 0 0 1px var(--preset-accent);
+}
+.hud-preset-swatch {
+  display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.hud-preset-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  box-shadow: 0 0 6px 0 currentColor;
+}
+.hud-preset-name {
+  flex: 1; min-width: 0;
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hud-preset-card.selected .hud-preset-name { color: var(--text-primary); }
+.hud-preset-check {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--preset-accent); flex-shrink: 0;
+}
+
 /* ─── Activity HUD (floating #hud window) ─── */
+.hud-resize-grip {
+  position: absolute; right: 1px; bottom: 1px; z-index: 6;
+  display: flex; align-items: flex-end; justify-content: flex-end;
+  width: 18px; height: 18px; padding: 2px;
+  color: var(--text-tertiary); opacity: 0.45;
+  cursor: nwse-resize;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.hud-resize-grip:hover { opacity: 0.9; color: var(--accent); }
 .hud-root {
+  position: relative;
   width: calc(100vw - 2px);
   height: calc(100vh - 2px);
   margin: 1px;
@@ -1075,7 +1133,45 @@ html, body, #root {
   font-size: 11px;
   user-select: none;
   -webkit-font-smoothing: antialiased;
-  transition: opacity 0.14s ease;
+  transition: opacity 0.14s ease, background 0.3s ease, border-color 0.3s ease;
+}
+
+/* ── HUD color presets (theme the whole HUD via accent + background) ── */
+/* midnight = default look above; listed here for parity. */
+.hud-root[data-hud-preset="cyber"] {
+  --accent: #818cf8; --accent-hover: #a5b4fc; --accent-dim: rgba(99, 102, 241, 0.2);
+  --border-light: rgba(129, 140, 248, 0.22);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(99, 102, 241, 0.22), transparent 62%),
+    linear-gradient(165deg, #1e1b4b 0%, #0f172a 100%);
+}
+.hud-root[data-hud-preset="matrix"] {
+  --accent: #34d399; --accent-hover: #6ee7b7; --accent-dim: rgba(52, 211, 153, 0.18);
+  --border-light: rgba(52, 211, 153, 0.22);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(52, 211, 153, 0.20), transparent 62%),
+    linear-gradient(165deg, #052e23 0%, #04130d 100%);
+}
+.hud-root[data-hud-preset="gold"] {
+  --accent: #fbbf24; --accent-hover: #fcd34d; --accent-dim: rgba(245, 158, 11, 0.18);
+  --border-light: rgba(217, 165, 32, 0.26);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(245, 158, 11, 0.20), transparent 62%),
+    linear-gradient(165deg, #2d1a00 0%, #160c00 100%);
+}
+.hud-root[data-hud-preset="synthwave"] {
+  --accent: #f472b6; --accent-hover: #f9a8d4; --accent-dim: rgba(236, 72, 153, 0.2);
+  --border-light: rgba(244, 114, 182, 0.24);
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(236, 72, 153, 0.24), transparent 60%),
+    linear-gradient(165deg, #3b0764 0%, #1a0b2e 100%);
+}
+.hud-root[data-hud-preset="graphite"] {
+  --accent: #cbd5e1; --accent-hover: #e2e8f0; --accent-dim: rgba(148, 163, 184, 0.16);
+  --border-light: rgba(148, 163, 184, 0.18);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(148, 163, 184, 0.12), transparent 62%),
+    linear-gradient(165deg, #27272a 0%, #161618 100%);
 }
 
 /* Header */
@@ -1166,6 +1262,44 @@ html, body, #root {
 .hud-slide[data-dir="-1"] { animation: hud-in-left 0.26s cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes hud-in-right { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 @keyframes hud-in-left  { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+
+/* Recent Requests feed (table-style slide) */
+.hud-feed-head {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; gap: 7px;
+  padding: 3px 8px 4px;
+  font-size: 8.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: rgba(16, 16, 20, 0.86);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-light);
+  border-radius: 6px 6px 0 0;
+}
+.hud-feed-head .hud-feed-model { padding-left: 13px; }  /* clear the status dot column */
+.hud-feed-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 8px; border-radius: 6px;
+}
+.hud-feed-row:hover { background: var(--bg-hover); }
+.hud-feed-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.hud-feed-dot.ok { background: var(--green); }
+.hud-feed-dot.err { background: #ff453a; }
+.hud-feed-model {
+  flex: 1; min-width: 0;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  font-size: 10px; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hud-feed-io {
+  flex-shrink: 0; text-align: right; min-width: 76px;
+  font-size: 9px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.hud-feed-io .in  { color: #ff9f0a; font-weight: 600; }
+.hud-feed-io .out { color: var(--green); font-weight: 600; }
+.hud-feed-when {
+  flex-shrink: 0; text-align: right; min-width: 44px;
+  font-size: 9px; color: var(--text-tertiary); white-space: nowrap;
+}
 
 /* Rows */
 .hud-row {

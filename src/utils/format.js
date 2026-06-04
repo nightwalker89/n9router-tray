@@ -32,6 +32,23 @@ export function formatTime(iso) {
 }
 
 /**
+ * Relative time from ISO string: "5m ago", "14h ago", "3d ago"
+ */
+export function timeAgo(iso) {
+  if (!iso) return "—";
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return "—";
+  const s = Math.max(0, (Date.now() - then) / 1000);
+  if (s < 10) return "now";
+  if (s < 60) return `${Math.floor(s)}s ago`;
+  const m = s / 60;
+  if (m < 60) return `${Math.floor(m)}m ago`;
+  const h = m / 60;
+  if (h < 24) return `${Math.floor(h)}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+/**
  * Shorten model name: "claude-sonnet-4-20250514" → "claude-sonnet-4"
  */
 export function shortModel(model) {

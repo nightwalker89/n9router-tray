@@ -7,21 +7,24 @@
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow, PhysicalPosition, PhysicalSize, LogicalSize } from "@tauri-apps/api/window";
 import { load } from "@tauri-apps/plugin-store";
 import { api } from "../api/client";
-import { formatTokens, shortModel, formatTime } from "../utils/format";
+import { formatTokens, shortModel, formatTime, timeAgo } from "../utils/format";
+import { DEFAULT_HUD_PRESET, resolveHudPreset } from "../hud/presets";
 
-const TABS = ["live", "recent", "providers", "models"];
+const TABS = ["live", "recent", "feed", "providers", "models"];
 const META = {
-  live:      { label: "Live Activity", icon: ActivityIcon },
-  recent:    { label: "Recent",        icon: ClockIcon },
-  providers: { label: "By Provider",   icon: ServerIcon },
-  models:    { label: "Top Models",    icon: ChipIcon },
+  live:      { label: "Live Activity",    icon: ActivityIcon },
+  recent:    { label: "Recent",           icon: ClockIcon },
+  feed:      { label: "Recent Requests",  icon: ListIcon },
+  providers: { label: "By Provider",      icon: ServerIcon },
+  models:    { label: "Top Models",       icon: ChipIcon },
 };
 const POLL_MS = 2500;
 const ROTATE_MS = 7000;
 const IDLE_RESUME_MS = 15000;
+const DEFAULT_SIZE = { w: 360, h: 480 }; // must match build_hud_window inner_size
 
 export default function HudPanel() {
   const [stats, setStats] = useState(null);
@@ -30,34 +33,51 @@ export default function HudPanel() {
   const [dir, setDir] = useState(1);
   const [paused, setPaused] = useState(false);
   const [bgAlpha, setBgAlpha] = useState(0.95);
+  const [preset, setPreset] = useState(DEFAULT_HUD_PRESET);
   const [pointerActive, setPointerActive] = useState(false);
   const [windowFocused, setWindowFocused] = useState(() => document.hasFocus());
   const hovering = useRef(false);
   const lastInteraction = useRef(0);
   const inFlight = useRef(false);
 
-  // ── Position persistence (store-based) ──
+  // ── Position + size persistence (store-based) ──
   useEffect(() => {
-    let unlisten;
+    const unlisteners = [];
     (async () => {
       try {
         const store = await load("tray-settings.json", { autoSave: false });
-        const pos = await store.get("hudPos");
         const win = getCurrentWindow();
+
+        // Restore size first so position anchoring uses the final geometry.
+        const size = await store.get("hudSize");
+        if (size && Number.isFinite(size.w) && Number.isFinite(size.h)) {
+          await win.setSize(new PhysicalSize(size.w, size.h));
+        }
+        const pos = await store.get("hudPos");
         if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
           await win.setPosition(new PhysicalPosition(pos.x, pos.y));
         }
-        let t;
-        unlisten = await win.onMoved(({ payload }) => {
-          clearTimeout(t);
-          t = setTimeout(async () => {
+
+        let mt;
+        unlisteners.push(await win.onMoved(({ payload }) => {
+          clearTimeout(mt);
+          mt = setTimeout(async () => {
             await store.set("hudPos", { x: payload.x, y: payload.y });
             await store.save();
           }, 400);
-        });
+        }));
+
+        let rt;
+        unlisteners.push(await win.onResized(({ payload }) => {
+          clearTimeout(rt);
+          rt = setTimeout(async () => {
+            await store.set("hudSize", { w: payload.width, h: payload.height });
+            await store.save();
+          }, 400);
+        }));
       } catch { /* ignore */ }
     })();
-    return () => { if (unlisten) unlisten(); };
+    return () => unlisteners.forEach((u) => u && u());
   }, []);
 
   // ── Active HUD should be fully readable while focused or under pointer/touch ──
@@ -84,6 +104,19 @@ export default function HudPanel() {
         const store = await load("tray-settings.json", { autoSave: false });
         apply(await store.get("hudOpacity"));
         unlisten = await store.onKeyChange("hudOpacity", apply);
+      } catch { /* ignore */ }
+    })();
+    return () => { if (unlisten) unlisten(); };
+  }, []);
+
+  // ── HUD color preset (live, cross-window via store change events) ──
+  useEffect(() => {
+    let unlisten;
+    (async () => {
+      try {
+        const store = await load("tray-settings.json", { autoSave: false });
+        setPreset(resolveHudPreset(await store.get("hudPreset")));
+        unlisten = await store.onKeyChange("hudPreset", (v) => setPreset(resolveHudPreset(v)));
       } catch { /* ignore */ }
     })();
     return () => { if (unlisten) unlisten(); };
@@ -126,6 +159,18 @@ export default function HudPanel() {
     go(t, TABS.indexOf(t) >= TABS.indexOf(tab) ? 1 : -1);
   };
 
+  // ── Manual resize for the borderless window (grip + dbl-click reset) ──
+  const startResize = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    getCurrentWindow().startResizeDragging("SouthEast").catch(() => {});
+  }, []);
+  const resetSize = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    getCurrentWindow().setSize(new LogicalSize(DEFAULT_SIZE.w, DEFAULT_SIZE.h)).catch(() => {});
+  }, []);
+
   // ── Keyboard ←/→ ──
   useEffect(() => {
     const h = (e) => {
@@ -155,13 +200,14 @@ export default function HudPanel() {
   const hudOpacity = pointerActive || windowFocused ? 1 : bgAlpha;
   const tabCount =
     tab === "live" ? active.length :
-    tab === "recent" ? recent.length :
+    tab === "recent" || tab === "feed" ? recent.length :
     tab === "providers" ? Object.keys(stats?.byProvider || {}).length :
     Object.keys(stats?.byModel || {}).length;
 
   return (
     <div
       className="hud-root"
+      data-hud-preset={preset}
       style={{ "--hud-opacity": hudOpacity }}
       onMouseEnter={() => { hovering.current = true; setPointerActive(true); }}
       onMouseLeave={() => { hovering.current = false; setPointerActive(false); }}
@@ -242,6 +288,32 @@ export default function HudPanel() {
                     </div>
                   );
                 })
+          ) : tab === "feed" ? (
+            recent.length === 0
+              ? <div className="hud-state"><ListIcon /><span>No requests yet</span></div>
+              : (
+                <>
+                  <div className="hud-feed-head">
+                    <span className="hud-feed-model">Model</span>
+                    <span className="hud-feed-io">In / Out</span>
+                    <span className="hud-feed-when">When</span>
+                  </div>
+                  {recent.slice(0, 12).map((r, i) => {
+                    const ok = !r.status || r.status === "ok" || r.status === "success";
+                    return (
+                      <div className="hud-feed-row" key={i}>
+                        <span className={`hud-feed-dot ${ok ? "ok" : "err"}`} />
+                        <span className="hud-feed-model" title={r.model}>{shortModel(r.model)}</span>
+                        <span className="hud-feed-io">
+                          <b className="in">{formatTokens(r.promptTokens)}↑</b>{" "}
+                          <b className="out">{formatTokens(r.completionTokens)}↓</b>
+                        </span>
+                        <span className="hud-feed-when" title={formatTime(r.timestamp)}>{timeAgo(r.timestamp)}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              )
           ) : tab === "providers" ? (
             barRows(stats?.byProvider, (v) => (v.promptTokens || 0) + (v.completionTokens || 0), formatTokens)
           ) : (
@@ -260,6 +332,19 @@ export default function HudPanel() {
             onClick={() => jump(t)}
           />
         ))}
+      </div>
+
+      {/* Resize grip (borderless window needs a manual handle) */}
+      <div
+        className="hud-resize-grip"
+        title="Drag to resize · double-click to reset"
+        onPointerDown={startResize}
+        onDoubleClick={resetSize}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+          <line x1="11" y1="5" x2="5" y2="11" />
+          <line x1="11" y1="9" x2="9" y2="11" />
+        </svg>
       </div>
     </div>
   );
@@ -308,6 +393,7 @@ function ActivityIcon() { return svg(<polyline points="22 12 18 12 15 21 9 3 6 1
 function ClockIcon() { return svg(<><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></>); }
 function ServerIcon() { return svg(<><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><line x1="7" y1="7.5" x2="7" y2="7.5" /><line x1="7" y1="16.5" x2="7" y2="16.5" /></>); }
 function ChipIcon() { return svg(<><rect x="7" y="7" width="10" height="10" rx="1.5" /><line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" /></>); }
+function ListIcon() { return svg(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>); }
 function CloseIcon() { return svg(<><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></>, 12); }
 function PauseIcon() { return svg(<><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></>, 12); }
 function PlayIcon() { return svg(<polygon points="7 5 19 12 7 19 7 5" fill="currentColor" stroke="none" />, 12); }
