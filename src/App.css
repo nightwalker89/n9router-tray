@@ -1035,3 +1035,191 @@ html, body, #root {
 }
 .settings-action-btn:hover  { background: var(--bg-hover); }
 .settings-action-btn:active { background: var(--bg-active); }
+
+/* ─── HUD opacity slider (in Settings) ─── */
+.hud-opacity-control { display: flex; align-items: center; gap: 8px; }
+.hud-opacity-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 96px; height: 4px; border-radius: 3px;
+  background: var(--bg-tertiary); cursor: pointer; outline: none;
+}
+.hud-opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); cursor: pointer;
+}
+.hud-opacity-slider:disabled { opacity: 0.4; cursor: not-allowed; }
+.hud-opacity-value {
+  font-size: 11px; font-weight: 600; color: var(--text-secondary);
+  min-width: 34px; text-align: right; font-variant-numeric: tabular-nums;
+}
+
+/* ─── Activity HUD (floating #hud window) ─── */
+.hud-root {
+  width: calc(100vw - 2px);
+  height: calc(100vh - 2px);
+  margin: 1px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  clip-path: inset(0 round 14px);
+  opacity: var(--hud-opacity, 0.95);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(10, 132, 255, 0.10), transparent 60%),
+    linear-gradient(165deg, rgba(40, 40, 46, 0.98), rgba(22, 22, 25, 0.98));
+  border: 1px solid var(--border-light);
+  box-shadow: 0 10px 38px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-size: 11px;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  transition: opacity 0.14s ease;
+}
+
+/* Header */
+.hud-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 9px;
+  cursor: grab;
+}
+.hud-header:active { cursor: grabbing; }
+.hud-live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-tertiary); flex-shrink: 0; transition: background 0.2s ease;
+}
+.hud-live-dot.on { background: var(--green); box-shadow: 0 0 0 3px var(--green-dim); animation: hud-pulse 1.4s ease-in-out infinite; }
+.hud-header-info { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+.hud-model {
+  font-size: 12.5px; font-weight: 650; letter-spacing: -0.01em; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hud-provider { font-size: 9.5px; color: var(--text-tertiary); text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud-token-pill {
+  font-size: 10px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;
+  padding: 3px 7px; border-radius: 7px; background: var(--bg-tertiary); font-variant-numeric: tabular-nums;
+}
+.hud-icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--text-tertiary);
+  cursor: pointer; padding: 4px; border-radius: 6px; flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.hud-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Sub-header — labels the active tab */
+.hud-subheader {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.hud-tab-icon { display: flex; color: var(--accent); flex-shrink: 0; }
+.hud-tab-name {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.hud-tab-count {
+  font-size: 9px; font-weight: 700; color: var(--accent);
+  background: var(--accent-dim); padding: 1px 6px; border-radius: 8px; font-variant-numeric: tabular-nums;
+}
+.hud-nav-hint { margin-left: auto; font-size: 10px; letter-spacing: 2px; color: var(--text-tertiary); opacity: 0.55; }
+.hud-playpause { margin-left: auto; padding: 3px; }
+.hud-playpause.is-paused { color: var(--accent); background: var(--accent-dim); }
+.hud-playpause.is-paused:hover { color: var(--accent-hover); }
+
+/* Rotation progress */
+.hud-progress-track { height: 2px; background: rgba(255, 255, 255, 0.05); overflow: hidden; }
+.hud-progress-fill {
+  height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  animation: hud-progress linear forwards; transform-origin: left;
+}
+.hud-progress-fill.paused { animation-play-state: paused; }
+.hud-root:hover .hud-progress-fill { animation-play-state: paused; }
+@keyframes hud-progress { from { width: 0; } to { width: 100%; } }
+
+/* Error chip */
+.hud-error-chip {
+  display: flex; align-items: center; gap: 5px;
+  margin: 8px 10px 0; padding: 4px 9px; border-radius: 7px;
+  background: rgba(255, 69, 58, 0.14); color: #ff6961; font-size: 10px; font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* Body + slide transition */
+.hud-body { flex: 1; overflow: hidden; padding: 6px 6px 2px; position: relative; }
+.hud-slide { display: flex; flex-direction: column; gap: 2px; height: 100%; overflow-y: auto; }
+.hud-slide {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.hud-slide::-webkit-scrollbar { width: 4px; }
+.hud-slide::-webkit-scrollbar-track { background: transparent; }
+.hud-slide::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+.hud-slide::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+.hud-slide[data-dir="1"]  { animation: hud-in-right 0.26s cubic-bezier(0.22, 1, 0.36, 1); }
+.hud-slide[data-dir="-1"] { animation: hud-in-left 0.26s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes hud-in-right { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes hud-in-left  { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+
+/* Rows */
+.hud-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 8px; border-radius: 8px;
+}
+.hud-row:hover { background: var(--bg-hover); }
+.hud-row-body { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+.hud-row-main {
+  font-size: 11.5px; font-weight: 550; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hud-row-sub { font-size: 9px; color: var(--text-tertiary); text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.hud-dot.pulse { box-shadow: 0 0 0 3px var(--green-dim); animation: hud-pulse 1.4s ease-in-out infinite; }
+.hud-status-bar { width: 3px; align-self: stretch; border-radius: 2px; flex-shrink: 0; }
+.hud-status-bar.ok { background: var(--green); }
+.hud-status-bar.err { background: #ff453a; }
+.hud-badge {
+  font-size: 9.5px; font-weight: 700; color: var(--accent);
+  background: var(--accent-dim); padding: 2px 7px; border-radius: 7px; flex-shrink: 0;
+}
+.hud-tok { font-size: 9px; color: var(--text-tertiary); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.hud-tok b { color: var(--text-secondary); font-weight: 600; }
+@keyframes hud-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Bar rows (providers / models) */
+.hud-bar-row { padding: 6px 8px; display: flex; flex-direction: column; gap: 5px; }
+.hud-bar-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hud-bar-top .hud-row-main { text-transform: capitalize; }
+.hud-bar-track { height: 4px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; }
+.hud-bar-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Empty / offline states */
+.hud-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  height: 100%; color: var(--text-tertiary); font-size: 11px; opacity: 0.75;
+}
+.hud-state svg { opacity: 0.6; }
+
+/* Tab dots */
+.hud-dots { display: flex; justify-content: center; gap: 7px; padding: 9px 0 11px; }
+.hud-dot-btn {
+  width: 6px; height: 6px; border-radius: 50%; border: none; padding: 0;
+  background: var(--text-tertiary); opacity: 0.35; cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease, width 0.2s ease;
+}
+.hud-dot-btn:hover { opacity: 0.7; }
+.hud-dot-btn.active { background: var(--accent); opacity: 1; width: 16px; border-radius: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-slide, .hud-progress-fill, .hud-dot.pulse, .hud-live-dot.on { animation: none !important; }
+}

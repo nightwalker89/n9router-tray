@@ -119,6 +119,9 @@ export default function SettingsPanel() {
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [killPort, setKillPort]     = useState(false);
   const [verboseLog, setVerboseLog] = useState(false);
+  const [showHud, setShowHud]       = useState(false);
+  const [showHudOnStart, setShowHudOnStart] = useState(false);
+  const [hudOpacity, setHudOpacity] = useState(95);
   const [storeReady, setStoreReady] = useState(false);
   const [store, setStore]           = useState(null);
 
@@ -147,6 +150,10 @@ export default function SettingsPanel() {
         setKillPort(!!kp);
         const vl = await s.get("verboseLogging");
         setVerboseLog(!!vl);
+        setShowHud(!!(await s.get("showHud")));
+        setShowHudOnStart(!!(await s.get("showHudOnStart")));
+        const ho = await s.get("hudOpacity");
+        if (Number.isFinite(ho)) setHudOpacity(ho);
         setStore(s);
         setStoreReady(true);
       })
@@ -198,6 +205,31 @@ export default function SettingsPanel() {
     setVerboseLog(val);
     if (store) {
       await store.set("verboseLogging", val);
+      await store.save();
+    }
+  };
+
+  const setShowHudVal = async val => {
+    setShowHud(val);
+    try { await invoke(val ? "open_hud_window" : "close_hud_window"); } catch {}
+    if (store) {
+      await store.set("showHud", val);
+      await store.save();
+    }
+  };
+
+  const setShowHudOnStartVal = async val => {
+    setShowHudOnStart(val);
+    if (store) {
+      await store.set("showHudOnStart", val);
+      await store.save();
+    }
+  };
+
+  const setHudOpacityVal = async val => {
+    setHudOpacity(val);
+    if (store) {
+      await store.set("hudOpacity", val);
       await store.save();
     }
   };
@@ -307,6 +339,39 @@ export default function SettingsPanel() {
           topBorder
         >
           <SettingToggle checked={verboseLog} onChange={setVerboseLogVal} disabled={!storeReady} />
+        </SettingRow>
+        <SettingRow
+          label="Show Activity HUD"
+          description="Floating widget with live routing activity"
+          topBorder
+        >
+          <SettingToggle checked={showHud} onChange={setShowHudVal} disabled={!storeReady} />
+        </SettingRow>
+        <SettingRow
+          label="Show HUD on start"
+          description="Open the Activity HUD automatically at launch"
+          topBorder
+        >
+          <SettingToggle checked={showHudOnStart} onChange={setShowHudOnStartVal} disabled={!storeReady} />
+        </SettingRow>
+        <SettingRow
+          label="HUD Opacity"
+          description="Opacity of the Activity HUD while idle"
+          topBorder
+        >
+          <div className="hud-opacity-control">
+            <input
+              type="range"
+              className="hud-opacity-slider"
+              min={40}
+              max={100}
+              step={5}
+              value={hudOpacity}
+              disabled={!storeReady}
+              onChange={e => setHudOpacityVal(Number(e.target.value))}
+            />
+            <span className="hud-opacity-value">{hudOpacity}%</span>
+          </div>
         </SettingRow>
       </div>
 

@@ -11,6 +11,8 @@ use tauri::{
     Manager,
 };
 use tauri_plugin_positioner::{Position, WindowExt};
+#[allow(unused_imports)]
+use tauri::window::{Effect, EffectState, EffectsBuilder};
 
 // ── Windows platform module ──────────────────────────────────────────────────
 // All Windows-specific seam fns live in this separate file. macOS impls stay
@@ -834,6 +836,73 @@ fn open_terminal_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// ── Activity HUD floating window ──────────────────────────────────────────────
+
+/// Build the glossy floating HUD. Effects are cfg-gated: macOS vibrancy
+/// (HudWindow), Windows 11 Mica (no-op/ignored on Win10 → opaque CSS fallback).
+fn build_hud_window(app: &tauri::AppHandle) -> Result<(), String> {
+    let builder = tauri::WebviewWindowBuilder::new(
+        app,
+        "hud",
+        tauri::WebviewUrl::App("index.html#hud".into()),
+    )
+    .title("Activity")
+    .inner_size(280.0, 360.0)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .shadow(false);
+
+    // macOS: no native vibrancy — its square NSVisualEffect layer leaks past the
+    // rounded CSS corners. The CSS glass (.hud-root) is the surface instead, which
+    // also keeps the opacity slider authoritative. Corners stay clean.
+    // Windows 11 rounds windows via DWM, so Mica clips correctly there.
+    #[cfg(target_os = "windows")]
+    let builder = builder.effects(EffectsBuilder::new().effect(Effect::Mica).build());
+
+    let win = builder
+        .build()
+        .map_err(|e| format!("Failed to open HUD window: {e}"))?;
+
+    // Default anchor top-right; JS restores persisted position on mount.
+    let _ = win.move_window(Position::TopRight);
+    Ok(())
+}
+
+#[tauri::command]
+fn open_hud_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("hud") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+    build_hud_window(&app)
+}
+
+#[tauri::command]
+fn close_hud_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("hud") {
+        let _ = win.hide();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_hud_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("hud") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+        } else {
+            let _ = win.show();
+            let _ = win.set_focus();
+        }
+        return Ok(());
+    }
+    build_hud_window(&app)
+}
+
 // ── App Entry ────────────────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -875,6 +944,9 @@ pub fn run() {
             n9router_get_logs,
             n9router_focus_terminal,
             open_terminal_window,
+            open_hud_window,
+            close_hud_window,
+            toggle_hud_window,
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -885,8 +957,11 @@ pub fn run() {
             let quit_item = MenuItemBuilder::with_id("quit", "Quit n9router tray").build(app)?;
             let dashboard_item =
                 MenuItemBuilder::with_id("dashboard", "Open Dashboard").build(app)?;
+            let hud_item =
+                MenuItemBuilder::with_id("hud", "Activity HUD").build(app)?;
             let menu = MenuBuilder::new(app)
                 .item(&dashboard_item)
+                .item(&hud_item)
                 .separator()
                 .item(&quit_item)
                 .build()?;
@@ -906,6 +981,7 @@ pub fn run() {
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "quit" => { app.exit(0); }
                     "dashboard" => { let _ = open::that("http://localhost:20128/dashboard"); }
+                    "hud" => { let _ = toggle_hud_window(app.clone()); }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {

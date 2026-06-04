@@ -7,10 +7,12 @@ import ProvidersPanel from "./panels/ProvidersPanel";
 import UsagePanel from "./panels/UsagePanel";
 import SettingsPanel from "./panels/SettingsPanel";
 import TerminalPanel from "./panels/TerminalPanel";
+import HudPanel from "./panels/HudPanel";
 import { useAutoStart } from "./hooks/useAutoStart";
 
-// ── Hash routing — terminal window is a separate Tauri window at /#terminal ──
+// ── Hash routing — separate Tauri windows: /#terminal and /#hud ──
 const isTerminalWindow = window.location.hash === "#terminal";
+const isHudWindow = window.location.hash === "#hud";
 
 const TABS = [
   { id: "mitm",      label: "MITM",      icon: "🛡️" },
@@ -168,6 +170,18 @@ function TrayApp() {
   // Auto-start n9router if configured in tray settings
   useAutoStart();
 
+  // Open Activity HUD on launch if enabled
+  useEffect(() => {
+    (async () => {
+      try {
+        const store = await load("tray-settings.json", { autoSave: false });
+        if (await store.get("showHudOnStart")) {
+          await invoke("open_hud_window");
+        }
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   // Health check every 10s
   useEffect(() => {
     let active = true;
@@ -287,5 +301,6 @@ function TabBar({ activeTab, setActiveTab }) {
 
 export default function App() {
   if (isTerminalWindow) return <TerminalWindow />;
+  if (isHudWindow) return <HudPanel />;
   return <TrayApp />;
 }
