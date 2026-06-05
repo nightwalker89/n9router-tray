@@ -292,22 +292,26 @@ fn kill_pid(pid: u32) -> bool {
 
 // ── n9router helpers ─────────────────────────────────────────────────────────
 
-/// Return ALL PIDs listening on n9router port, preferring ones with a terminal ancestor.
-/// Multiple PIDs can appear when e.g. Chrome and a terminal both hold a process on the port.
+/// Return ALL PIDs listening on n9router port.
+/// Use LISTEN-only lookup so tray HTTP client connections are never mistaken
+/// for the n9router server process and killed by `n9router_stop`.
 #[cfg(target_os = "macos")]
 fn find_n9router_pids() -> Vec<u32> {
     let output = match Command::new("lsof")
-        .args(["-ti", &format!(":{}", N9ROUTER_PORT)])
+        .args(["-ti", &format!("TCP:{}", N9ROUTER_PORT), "-sTCP:LISTEN"])
         .output()
     {
         Ok(o) if o.status.success() => o,
         _ => return vec![],
     };
-    String::from_utf8_lossy(&output.stdout)
+    let mut pids: Vec<u32> = String::from_utf8_lossy(&output.stdout)
         .trim()
         .split('\n')
         .filter_map(|s| s.trim().parse::<u32>().ok())
-        .collect()
+        .collect();
+    pids.sort_unstable();
+    pids.dedup();
+    pids
 }
 
 /// Return a single PID for status/stop: prefer the terminal-started one.
