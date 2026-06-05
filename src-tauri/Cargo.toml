@@ -1,6 +1,6 @@
 [package]
 name = "n9router-tray"
-version = "0.1.5"
+version = "0.1.6"
 description = "n9router menu bar control panel"
 authors = ["cuongquach"]
 license = "MIT"

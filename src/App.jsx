@@ -10,6 +10,8 @@ import TerminalPanel from "./panels/TerminalPanel";
 import HudPanel from "./panels/HudPanel";
 import { useAutoStart } from "./hooks/useAutoStart";
 
+const APP_VERSION = __APP_VERSION__;
+
 // ── Hash routing — separate Tauri windows: /#terminal and /#hud ──
 const isTerminalWindow = window.location.hash === "#terminal";
 const isHudWindow = window.location.hash === "#hud";
@@ -272,7 +274,7 @@ function TabBar({ activeTab, setActiveTab }) {
   return (
     <div className="tab-bar">
       <span className="tab-bar-title">n9</span>
-      <span className="tab-bar-version">v0.1.4</span>
+      <span className="tab-bar-version">v{APP_VERSION}</span>
       {TABS.map((tab) => (
         <button
           key={tab.id}
