@@ -24,7 +24,7 @@ const META = {
 const POLL_MS = 2500;
 const ROTATE_MS = 7000;
 const IDLE_RESUME_MS = 15000;
-const DEFAULT_SIZE = { w: 360, h: 480 }; // must match build_hud_window inner_size
+const DEFAULT_SIZE = { w: 440, h: 600 }; // must match build_hud_window inner_size
 
 export default function HudPanel() {
   const [stats, setStats] = useState(null);

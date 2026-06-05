@@ -847,8 +847,8 @@ fn build_hud_window(app: &tauri::AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("index.html#hud".into()),
     )
     .title("Activity")
-    .inner_size(360.0, 480.0)
-    .min_inner_size(280.0, 340.0)
+    .inner_size(440.0, 600.0)
+    .min_inner_size(320.0, 400.0)
     .resizable(true)
     .decorations(false)
     .transparent(true)
