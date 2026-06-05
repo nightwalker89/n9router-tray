@@ -1,7 +1,7 @@
 {
   "name": "n9tray",
   "version": "0.0.0",
-  "description": "n9router tray app installer and launcher for macOS and Windows",
+  "description": "n9router Tray app installer and launcher for macOS and Windows",
   "bin": { "n9tray": "./bin/n9tray.js" },
   "os": ["darwin", "win32"],
   "engines": { "node": ">=18" },

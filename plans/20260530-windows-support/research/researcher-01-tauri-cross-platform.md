@@ -23,7 +23,7 @@ How a Tauri 2 tray app written for macOS runs on Windows. Focus: tray, windowing
 
 ### Packaging
 - Bundle targets: `nsis` (.exe installer, recommended default) and `msi` (WiX v3, requires WiX toolset — preinstalled on `windows-latest` GH runner). Tauri auto-skips targets not valid for the host OS, so a combined `["dmg","app","nsis","msi"]` list is safe.
-- NSIS default install dir: `%LOCALAPPDATA%\<productName>` (perMachine vs perUser configurable). Product name `"n9router tray"` → install path `%LOCALAPPDATA%\n9router tray\n9router tray.exe` for perUser, or `C:\Program Files\n9router tray\` for perMachine.
+- NSIS default install dir: `%LOCALAPPDATA%\<productName>` (perMachine vs perUser configurable). Product name `"n9router Tray"` → install path `%LOCALAPPDATA%\n9router Tray\n9router Tray.exe` for perUser, or `C:\Program Files\n9router Tray\` for perMachine.
 - WebView2: NSIS bootstrapper auto-downloads WebView2 runtime (`downloadBootstrapper` mode). Win11 ships it; Win10 may need it.
 - Icons: Windows needs `icon.ico` (present). Square*Logo.png are for MSIX (not used here).
 

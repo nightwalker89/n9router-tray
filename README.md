@@ -1,4 +1,4 @@
-# n9router tray
+# n9router Tray
 
 A macOS and Windows menu bar / system tray app for managing [n9router](https://github.com/nightwalker89/n9router) — the MITM proxy that intercepts and routes AI coding tool requests across multiple provider accounts.
 
@@ -40,7 +40,7 @@ n9tray
 
 ### Manual
 
-- **macOS:** download the latest `.dmg` from [Releases](https://github.com/nightwalker89/n9router-tray/releases), open it, and drag **n9router tray** to `/Applications`.
+- **macOS:** download the latest `.dmg` from [Releases](https://github.com/nightwalker89/n9router-tray/releases), open it, and drag **n9router Tray** to `/Applications`.
 - **Windows:** download the latest `*-setup.exe` (or `.msi`) from [Releases](https://github.com/nightwalker89/n9router-tray/releases) and run the installer.
 
 ## Requirements

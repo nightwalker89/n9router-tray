@@ -55,7 +55,7 @@ From research:
   "app": {
     "windows": [{
       "label": "main",
-      "title": "n9 Control",
+      "title": "n9router Tray",
       "width": 360,
       "height": 520,
       "visible": false,

@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -24,13 +24,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: "npm"
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: 'src-tauri -> target'
-          shared-key: 'tauri-release'
+          workspaces: "src-tauri -> target"
+          shared-key: "tauri-release"
           cache-on-failure: true
 
       - name: Install frontend dependencies
@@ -46,7 +46,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref_name }}
-          name: 'n9 Control ${{ github.ref_name }}'
+          name: "n9router Tray ${{ github.ref_name }}"
           draft: false
           prerelease: false
           files: |
@@ -69,13 +69,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: "npm"
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: 'src-tauri -> target'
-          shared-key: 'tauri-release-windows'
+          workspaces: "src-tauri -> target"
+          shared-key: "tauri-release-windows"
           cache-on-failure: true
 
       - name: Install frontend dependencies
@@ -91,7 +91,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref_name }}
-          name: 'n9 Control ${{ github.ref_name }}'
+          name: "n9router Tray ${{ github.ref_name }}"
           draft: false
           prerelease: false
           files: |

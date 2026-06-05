@@ -77,5 +77,5 @@ publish:npm:next: ./scripts/publish-npm.sh --tag next
 **Existing tray setting:** `autoStartN9router` (auto-start n9router on tray launch) - already implemented!
 **Settings UI:** Section A "Tray" has the toggle already.
 
-**Tauri config:** identifier `com.n9router.tray`, productName `n9 Control`
+**Tauri config:** identifier `com.n9router.tray`, productName `n9router Tray`
 **Cargo deps:** No `tauri-plugin-autostart` yet. Has: tauri 2, positioner, shell, http, store, libc, once_cell.

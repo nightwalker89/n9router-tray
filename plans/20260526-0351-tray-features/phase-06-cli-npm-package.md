@@ -39,8 +39,8 @@ npm package (n9tray)
 
 Runtime flow:
   npx n9tray
-    └─ Check ~/.n9tray/n9router tray.app exists?
-         ├─ YES → open -a ~/.n9tray/n9router tray.app
+    └─ Check ~/.n9tray/n9router Tray.app exists?
+         ├─ YES → open -a ~/.n9tray/n9router Tray.app
          └─ NO  → Download from GitHub Release → extract → launch
 
 Publish flow:
@@ -74,7 +74,7 @@ Publish flow:
    const fs = require('fs');
 
    const APP_DIR = path.join(require('os').homedir(), '.n9tray');
-   const APP_PATH = path.join(APP_DIR, 'n9 Control.app');
+   const APP_PATH = path.join(APP_DIR, 'n9router Tray.app');
 
    const args = process.argv.slice(2);
 
@@ -138,7 +138,7 @@ Publish flow:
    {
      "name": "n9tray",
      "version": "0.0.0",
-     "description": "n9router tray app installer and launcher for macOS",
+     "description": "n9router Tray app installer and launcher for macOS",
      "bin": { "n9tray": "./bin/n9tray.js" },
      "os": ["darwin"],
      "engines": { "node": ">=18" },

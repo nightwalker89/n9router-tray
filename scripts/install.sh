@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install n9router tray — download latest release DMG and install to /Applications
+# Install n9router Tray — download latest release DMG and install to /Applications
 # Usage: curl -fsSL https://raw.githubusercontent.com/nightwalker89/n9router-tray/main/scripts/install.sh | bash
 set -euo pipefail
 
@@ -15,7 +15,7 @@ cleanup() { rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
 
 # Check macOS
-[[ "$(uname)" == "Darwin" ]] || die "n9router tray is macOS only"
+[[ "$(uname)" == "Darwin" ]] || die "n9router Tray is macOS only"
 
 info "Fetching latest release from GitHub..."
 RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"

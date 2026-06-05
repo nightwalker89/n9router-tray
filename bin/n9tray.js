@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * n9tray CLI — installer and launcher for the n9router tray app (macOS + Windows).
+ * n9tray CLI — installer and launcher for the n9router Tray app (macOS + Windows).
  *
  * Usage:
  *   n9tray              # launch (install if needed)
@@ -32,18 +32,18 @@ if (args.includes("--version") || args.includes("-v")) {
 
 // Candidate install locations per OS (first existing wins).
 const APP_PATHS = isMac
-  ? ["/Applications/n9router tray.app"]
+  ? ["/Applications/n9router Tray.app"]
   : [
       path.join(
         process.env.LOCALAPPDATA || "",
         "Programs",
-        "n9router tray",
-        "n9router tray.exe"
+        "n9router Tray",
+        "n9router Tray.exe",
       ),
       path.join(
         process.env.ProgramFiles || "C:\\Program Files",
-        "n9router tray",
-        "n9router tray.exe"
+        "n9router Tray",
+        "n9router Tray.exe",
       ),
     ];
 
@@ -52,10 +52,13 @@ const needsInstall =
   args.includes("--install") || args.includes("--update") || !installedPath;
 
 if (needsInstall) {
-  require("../lib/installer").install().then(launch).catch((err) => {
-    console.error("Install failed:", err.message);
-    process.exit(1);
-  });
+  require("../lib/installer")
+    .install()
+    .then(launch)
+    .catch((err) => {
+      console.error("Install failed:", err.message);
+      process.exit(1);
+    });
 } else {
   launch();
 }
@@ -69,7 +72,7 @@ function launch() {
       spawn(exe, [], { detached: true, stdio: "ignore" }).unref();
     }
   } catch {
-    console.error("Failed to launch n9router tray. Try: n9tray --install");
+    console.error("Failed to launch n9router Tray. Try: n9tray --install");
     process.exit(1);
   }
 }

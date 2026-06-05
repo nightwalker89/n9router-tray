@@ -955,7 +955,7 @@ pub fn run() {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             }
 
-            let quit_item = MenuItemBuilder::with_id("quit", "Quit n9router tray").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit n9router Tray").build(app)?;
             let dashboard_item =
                 MenuItemBuilder::with_id("dashboard", "Open Dashboard").build(app)?;
             let hud_item =
@@ -976,7 +976,7 @@ pub fn run() {
             let tray_builder = TrayIconBuilder::new()
                 .icon(Image::from_bytes(include_bytes!("../icons/icon.png"))?);
             let tray_icon = tray_builder
-                .tooltip("n9router tray")
+                .tooltip("n9router Tray")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id().as_ref() {

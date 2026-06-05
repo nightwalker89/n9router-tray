@@ -13,7 +13,7 @@ Make the single `n9tray` npm package self-detect OS: keep macOS DMG flow, add Wi
 ## Key Insights
 - One package, OS-dispatched at runtime (avoids separate npm packages).
 - **Separation rule (user):** keep existing macOS JS logic intact in its OWN module; put Windows logic in NEW modules; make the entry files thin dispatchers. So existing `lib/installer.js` DMG code moves verbatim into `lib/installer-macos.js`, and `lib/installer.js` becomes a 3-line `process.platform` switch. Windows lives in NEW `lib/installer-windows.js`.
-- NSIS perUser default install → `%LOCALAPPDATA%\Programs\n9router tray\n9router tray.exe`; probe `%ProgramFiles%` fallback for perMachine.
+- NSIS perUser default install → `%LOCALAPPDATA%\Programs\n9router Tray\n9router Tray.exe`; probe `%ProgramFiles%` fallback for perMachine.
 - NSIS silent install: `setup.exe /S` (no admin for currentUser mode).
 - Existing redirect-following `fetchJSON`/`download` helpers are pure Node https → share via a small `lib/http.js` (extracted once) so the Windows module reuses them without duplicating.
 
@@ -37,9 +37,9 @@ const isMac = process.platform === "darwin";
 if (!isWin && !isMac) { console.error("n9tray supports macOS and Windows only"); exit(1); }
 
 const APP_PATHS = isMac
-  ? ["/Applications/n9router tray.app"]
-  : [ path.join(process.env.LOCALAPPDATA, "Programs", "n9router tray", "n9router tray.exe"),
-      path.join(process.env.ProgramFiles||"C:/Program Files", "n9router tray", "n9router tray.exe") ];
+  ? ["/Applications/n9router Tray.app"]
+  : [ path.join(process.env.LOCALAPPDATA, "Programs", "n9router Tray", "n9router Tray.exe"),
+      path.join(process.env.ProgramFiles||"C:/Program Files", "n9router Tray", "n9router Tray.exe") ];
 const installed = APP_PATHS.find(fs.existsSync);
 
 function launch() {
@@ -93,7 +93,7 @@ if (-not $asset) { throw "No Windows installer found" }
 $tmp = Join-Path $env:TEMP $asset.name
 irm $asset.browser_download_url -OutFile $tmp
 Start-Process -FilePath $tmp -ArgumentList "/S" -Wait
-Write-Host "Installed n9router tray. Launch from Start Menu or: n9tray"
+Write-Host "Installed n9router Tray. Launch from Start Menu or: n9tray"
 ```
 
 ## Related Code Files

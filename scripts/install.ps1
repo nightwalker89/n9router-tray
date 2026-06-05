@@ -1,4 +1,4 @@
-# Install n9router tray — download latest release installer and run it (Windows)
+# Install n9router Tray — download latest release installer and run it (Windows)
 # Usage: irm https://raw.githubusercontent.com/nightwalker89/n9router-tray/main/scripts/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
@@ -40,7 +40,7 @@ if ($tmp -match "\.msi$") {
 
 Remove-Item $tmp -ErrorAction SilentlyContinue
 
-Ok "Installed n9router tray."
+Ok "Installed n9router Tray."
 Ok ""
 Ok "Launch from the Start Menu, or install the CLI for easier access:"
 Ok "  npm i -g n9tray"

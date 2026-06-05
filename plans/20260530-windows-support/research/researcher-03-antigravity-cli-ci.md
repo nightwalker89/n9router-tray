@@ -28,12 +28,12 @@ Windows mapping (best-effort, NEEDS USER CONFIRMATION):
 > OPEN: exact folder names + whether v1/v2 coexist in same dir on Windows. Code defaults provided; confirm before shipping.
 
 ## CLI (`n9tray` npm package)
-Current: macOS-only — `open -a "/Applications/n9router tray.app"`, installs via DMG (`hdiutil`).
+Current: macOS-only — `open -a "/Applications/n9router Tray.app"`, installs via DMG (`hdiutil`).
 
 Cross-platform plan:
 - `bin/n9tray.js`: branch on `process.platform`.
   - darwin: unchanged (`open -a`).
-  - win32: resolve exe at `%LOCALAPPDATA%\Programs\n9router tray\n9router tray.exe` (NSIS perUser default) with fallback `C:\Program Files\n9router tray\...`; launch via `child_process.spawn(exe, {detached:true})` or `start "" "<exe>"`.
+  - win32: resolve exe at `%LOCALAPPDATA%\Programs\n9router Tray\n9router Tray.exe` (NSIS perUser default) with fallback `C:\Program Files\n9router Tray\...`; launch via `child_process.spawn(exe, {detached:true})` or `start "" "<exe>"`.
 - `lib/installer.js`: add win32 branch — pick `.exe` asset from latest GitHub release, download to `os.tmpdir()`, run NSIS silently `installer.exe /S` (perUser, no admin) then locate installed exe. macOS DMG path unchanged.
 - `scripts/publish/package.json`: `"os": ["darwin"]` → `["darwin","win32"]`. Keep single package (`n9tray`) serving both OSes; bin script self-detects.
 

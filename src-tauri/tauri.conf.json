@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "n9router tray",
+  "productName": "n9router Tray",
   "version": "0.1.4",
   "identifier": "com.n9router.tray",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "n9router tray",
+        "title": "n9router Tray",
         "width": 400,
         "height": 540,
         "visible": false,
